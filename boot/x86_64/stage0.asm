@@ -15,6 +15,9 @@ boot:
 
     mov [BOOT_DRIVER], dl         ; save boot drive
 
+    mov si, welcome
+    call print_string
+
     ; get memory map
     mov al, 'M'                 ; set flag for print error
     call get_memory_map
@@ -31,7 +34,6 @@ boot:
     jc print_error
 
 
-    
     ; enable a20
     ; http://wiki.osdev.org/A20_Line
     in al, 0x92
@@ -70,40 +72,53 @@ boot:
     mov al, 'D'
     jc print_error
 
-    jmp .afterkernel
 
-.afterkernel:
+    mov si, done
+    call print_string
 
-    ; hide cursor by moving it out of the screen
     mov bh, 0
     mov ah, 2
     mov dx, 0xFFFF
     int 0x10
 
-    ; load protected mode GDT and a null IDT
     lgdt [gdtr32]
     lidt [idtr32]
 
-    ; set protected mode bit of cr0
     mov eax, cr0
     or eax, 1
     mov cr0, eax
 
-    ; far jump to load CS with 32 bit segment
     jmp 0x08:0x7e00
+
+    hlt
+print_string:    ; prints E and one letter from al and terminates, (error in boot sector 0)
+    lodsb        ; grab a byte from SI
+ 
+    or al, al  ; logical or AL by itself
+    jz .done   ; if the result is zero, get out
+    
+    mov ah, 0x0E
+    int 0x10      ; otherwise, print out the character!
+    
+    jmp print_string
+    
+.done:
+    ret
 
 print_error:    ; prints E and one letter from al and terminates, (error in boot sector 0)
     push ax
-        push ax
-            mov al, 'E'
-            mov ah, 0x0e
-            int 0x10
-        pop ax
-        mov ah, 0x0e
-        int 0x10
+        mov si, err
+        call print_string
     pop ax
-    jmp $
+    mov ah, 0x0e
+    int 0x10
+    hlt
+
 ALIGN 4
+welcome db 'Welcom to G8 OS!', 0x0D, 0x0A, 0
+err db 'Error: ', 0x0D, 0x0A, 0
+
+done db 'Boot success', 0x0D, 0x0A, 0
 da_packet:
     db 16               ; size of this packet (constant)
     db 0                ; reserved (always zero)
@@ -164,7 +179,6 @@ get_memory_map:
 .failed:
 	stc	                       ; "function unsupported" error exit, set carry
 	ret
-
 
 gdtr32:
     dw gdt32_begin - gdt32_end - 1  ; size

@@ -49,6 +49,8 @@ stage1:
     mov ds, ax
     mov es, ax
 
+jmp done
+
     ; jump into stage 2, and activate long mode
     ; jmp GDT_SELECTOR_CODE:0x8000
 
@@ -104,6 +106,10 @@ error:
     mov dword [0xb800a], 0x4f204f20
     mov byte  [0xb800a], al
     mov byte  [0xb800c], ah
+    hlt
+
+done:
+    mov dword [0xb8000], 0x2f4b2f4f
     hlt
 
 ; set up paging

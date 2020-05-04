@@ -25,10 +25,10 @@ build/boot/$(arch)/%.bin: boot/$(arch)/%.asm
 
  $(img): $(asm_boot_obj)
 	dd if=/dev/zero of=$(img) bs=65535 conv=notrunc count=64
-	dd if=build/g8os.img of=build/boot/$(arch)/stage0.bin bs=512 conv=notrunc seek=0 count=1
-	dd if=build/g8os.img of=build/boot/$(arch)/stage1.bin bs=512 conv=notrunc seek=1 count=1
+	dd of=$(img) if=build/boot/$(arch)/stage0.bin bs=512 conv=notrunc seek=0 count=1
+	dd of=$(img) if=build/boot/$(arch)/stage1.bin bs=512 conv=notrunc seek=1 count=1
 
 qemu: $(img)
-	qemu-system-x86_64 -d int -m 4G -no-reboot -drive file=${img},format=raw,if=ide -monitor stdio -serial file:CON -s -S
+	qemu-system-x86_64 -d int -m 4G -no-reboot -drive file=${img},format=raw,if=ide -monitor stdio
 
 
