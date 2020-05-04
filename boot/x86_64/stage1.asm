@@ -169,7 +169,6 @@ enable_paging:
 
     ret
 
-
 tmp_gdt64:
     dq 0 ; zero entry
     dq (1<<44) | (1<<47) | (1<<41) | (1<<43) | (1<<53) ; code segment

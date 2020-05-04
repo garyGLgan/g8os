@@ -1,0 +1,4 @@
+#![no_std]
+#![cfg_attr(test, no_main)]
+
+pub mod vga_buffer;
