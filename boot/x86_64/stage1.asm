@@ -49,10 +49,8 @@ stage1:
     mov ds, ax
     mov es, ax
 
-jmp done
-
     ; jump into stage 2, and activate long mode
-    ; jmp GDT_SELECTOR_CODE:0x8000
+    jmp GDT_SELECTOR_CODE:0x8000
 
 ; enable SSE
 ;https://wiki.osdev.org/SSE
