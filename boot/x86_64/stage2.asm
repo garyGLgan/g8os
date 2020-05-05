@@ -57,16 +57,25 @@ stage2:
     ; the first sector have been loaded at
     mov ax, [KERNEL_LOADPOINT + 58]
     mov bx, [KERNEL_LOADPOINT + 60] 
-    mul ebx, eax
+    imul ebx, eax
     mov rax, [KERNEL_LOADPOINT + 40]
     add rbx, rax, 
     add rbx, 0x1ff
     shl rbx, 9
     cmp rbx, 1
-    jbe loaded
+    jbe .loaded
 
     sub rbx, 1
 
+.ata_loop:
+    cmp rbx, 100
+    jbe .ata_last
+.ata_100
+    mov cl, 100
+    sub rbx, 100
+    mov eax, 
+
+.ata_last
 
     
 .loaded:
