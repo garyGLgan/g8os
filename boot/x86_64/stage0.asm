@@ -123,7 +123,7 @@ da_packet:
     db 16               ; size of this packet (constant)
     db 0                ; reserved (always zero)
 .count:
-    dw (BOOTLOADER_SECTOR_COUNT - 1)    ; count (how many sectors)
+    dw BOOTLOADER_SECTOR_COUNT    ; count (how many sectors)
 .address:                               ; ^ (127 might be a limit here, still 0xFF on most BIOSes)
     dw STAGE_1_LOADPOINT ; offset (where)
 .segment:

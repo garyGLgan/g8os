@@ -50,6 +50,7 @@ stage1:
     mov es, ax
 
     ; jump into stage 2, and activate long mode
+    ;jmp done
     jmp GDT_SELECTOR_CODE:0x8000
 
 ; enable SSE
