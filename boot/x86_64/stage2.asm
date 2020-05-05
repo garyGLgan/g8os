@@ -55,30 +55,34 @@ stage2:
     ; get how many sectors of kernel in the disk need to be loaded to memory
     ; size = elf_shoff + elf_shentsize * elf_shentnum, sectors = ( (size + 511) >> 9 )-1
     ; the first sector have been loaded at
-    mov ax, [KERNEL_LOADPOINT + 58]
-    mov bx, [KERNEL_LOADPOINT + 60] 
+    mov ax, word [KERNEL_LOADPOINT + 58]
+    mov bx, word [KERNEL_LOADPOINT + 60] 
     imul ebx, eax
-    mov rax, [KERNEL_LOADPOINT + 40]
-    add rbx, rax, 
+    mov rcx, qword [KERNEL_LOADPOINT + 40]
+    add rbx, rcx, 
     add rbx, 0x1ff
     shl rbx, 9
     cmp rbx, 1
-    jbe .loaded
+    jbe loaded
 
     sub rbx, 1
+    mov eax, 4
+    mov rdi, KERNEL_LOCATION + 0x200
 
-.ata_loop:
-    cmp rbx, 100
+ata_loop:
+    cmp rbx, 0x10
     jbe .ata_last
-.ata_100
-    mov cl, 100
-    sub rbx, 100
-    mov eax, 
-
-.ata_last
-
+    mov cl, 0x10
+    call ata_lab_mode
+    sub rbx, 0x10
+    add eax, 0x10
+    add rdi, 0x10 * 0x200 
+    jmp ata_loop
+.ata_last:
+    mov cl, bl
+    call ata_lab_mode
     
-.loaded:
+loaded:
     ; Parse program headers
     ; http://wiki.osdev.org/ELF#Program_header
     mov ah, 'H'
@@ -142,13 +146,13 @@ stage2:
     mov ah, '-'
 
     ; ELF relocation done
-.over:
+over:
 
     ; looks good, going to jump to kernel entry
     ; prints green "JK" for "Jump to Kernel"
     mov dword [0xb8000 + 80*4], 0x2f6b2f6a
-
-    jmp KERNEL_LOCATION ; jump to kernel
+    hlt
+    ;jmp KERNEL_LOCATION ; jump to kernel
 
 ata_lab_mode:
     pushfq
@@ -213,12 +217,8 @@ done:
     hlt
 
 error:
-    mov dword [0xb8000], 0x4f524f45
-    mov dword [0xb8004], 0x4f3a4f52
-    mov dword [0xb8008], 0x4f204f20
-    mov dword [0xb800a], 0x4f204f20
-    mov byte  [0xb800a], al
-    mov byte  [0xb800c], ah
+    mov byte  [0xb8000], al
+    mov byte  [0xb8002], ah
     hlt
 
 kernel_sectors: dw 0
