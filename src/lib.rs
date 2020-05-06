@@ -25,10 +25,11 @@ pub mod vga_buffer;
 #[naked]
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
-    println!("welcome to G8 OS!!!");
+    use x86_64::instructions::interrupts;
+
+    interrupts::without_interrupts(|| vga_buffer::WRITER.lock().write_byte('a' as u8));
     hlt_loop()
 }
-
 
 pub fn hlt_loop() -> ! {
     loop {
@@ -36,10 +37,8 @@ pub fn hlt_loop() -> ! {
     }
 }
 
-
 #[panic_handler]
 #[no_mangle]
 fn panic(info: &PanicInfo) -> ! {
-    println!("Panic: {}", info);
     hlt_loop();
 }

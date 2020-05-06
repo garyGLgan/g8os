@@ -23,24 +23,20 @@ stage2:
     mov al, 'E'
 
     ; magic number 0x7f+'ELF'
-    mov ah, '!'
     cmp dword [KERNEL_LOADPOINT], 0x464c457f
     jne error
 
     ; bitness and instruction set (must be 64, so values must be 2 and 0x3e) (error code: "EB")
-    mov ah, 'B'
     cmp byte [KERNEL_LOADPOINT + 4], 0x2
     jne error
     cmp word [KERNEL_LOADPOINT + 18], 0x3e
     jne error
 
     ; endianess (must be little endian, so value must be 1) (error code: "EE")
-    mov ah, 'E'
     cmp byte [KERNEL_LOADPOINT + 5], 0x1
     jne error
 
     ; elf version (must be 1) (error code: "EV")
-    mov ah, 'V'
     cmp byte [KERNEL_LOADPOINT + 0x0006], 0x1
     jne error
 
@@ -48,7 +44,6 @@ stage2:
 
     ; kernel entry position must be correct
     ; (error code : "Ep")
-    mov ah, 'p'
     cmp qword [KERNEL_LOADPOINT + 24], KERNEL_LOCATION
     jne error
 
@@ -62,12 +57,9 @@ stage2:
     add rbx, rcx, 
     add rbx, 0x1ff
     shr rbx, 9
-    cmp rbx, 1
-    jbe loaded
 
-    sub rbx, 1
-    mov eax, 4
-    mov rdi, KERNEL_LOCATION + 0x200
+    mov eax, 3
+    mov rdi, KERNEL_TMP_LOAD_POINT
 
 ata_loop:
     cmp rbx, 0x10
@@ -89,26 +81,27 @@ loaded:
 
     ; We know that program header size is 56 (=0x38) bytes
     ; still, lets check it:
-    cmp word [KERNEL_LOADPOINT + 54], 0x38
+    cmp word [KERNEL_TMP_LOAD_POINT + 54], 0x38
     jne error
 
-
+    ; bitness and instruction set (must be 64, so values must be 2 and 0x3e) (error code: "EB")
+   
+    
     ; program header table position
-    mov rbx, qword [KERNEL_LOADPOINT + 32]
-    add rbx, KERNEL_LOADPOINT ; now rbx points to first program header
+    mov rbx, qword [KERNEL_TMP_LOAD_POINT + 32]
+    add rbx, KERNEL_TMP_LOAD_POINT ; now rbx points to first program header
 
     ; length of program header table
     mov rcx, 0
-    mov cx, [KERNEL_LOADPOINT + 56]
+    mov cx, [KERNEL_TMP_LOAD_POINT + 56]
 
 .loop_headers:
     cmp dword [rbx], 1 ; load: this is important
     jne .next   ; if not important: continue
 
     push rcx
-
     mov rsi, [rbx + 8]
-    add rsi, KERNEL_LOADPOINT  ; now points to begin of buffer we must copy
+    add rsi, KERNEL_TMP_LOAD_POINT  ; now points to begin of buffer we must copy
 
     ; rdi = p_vaddr
     mov rdi, [rbx + 16]
@@ -139,17 +132,15 @@ loaded:
     add rbx, 0x38   ; skip entry (0x38 is entry size)
     loop .loop_headers
 
-    mov ah, '-'
 
     ; ELF relocation done
 over:
 
     ; looks good, going to jump to kernel entry
     ; prints green "JK" for "Jump to Kernel"
-    ; mov dword [0xb8000 + 80*4], 0x2f6b2f6a
-    mov dword [0xb8000 + 80*4], 0x2f6b2f6a
+    mov dword [0xb8000 + 80*10], 0x2f6b2f6a
     jmp KERNEL_LOCATION ; jump to kernel
-
+    
 ata_lab_mode:
     pushfq
     and rax, 0x0FFFFFFF
@@ -200,6 +191,7 @@ ata_lab_mode:
     mov rcx, rax         ; RCX is counter for INSW
     mov rdx, 0x1F0       ; Data port, in and out
     rep insw             ; in to [RDI]
+
 
     pop rdi
     pop rdx
