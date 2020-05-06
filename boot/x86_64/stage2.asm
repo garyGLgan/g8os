@@ -61,7 +61,7 @@ stage2:
     mov rcx, qword [KERNEL_LOADPOINT + 40]
     add rbx, rcx, 
     add rbx, 0x1ff
-    shl rbx, 9
+    shr rbx, 9
     cmp rbx, 1
     jbe loaded
 
@@ -85,7 +85,7 @@ ata_loop:
 loaded:
     ; Parse program headers
     ; http://wiki.osdev.org/ELF#Program_header
-    mov ah, 'H'
+    mov al, 'H'
 
     ; We know that program header size is 56 (=0x38) bytes
     ; still, lets check it:
@@ -101,11 +101,7 @@ loaded:
     mov rcx, 0
     mov cx, [KERNEL_LOADPOINT + 56]
 
-    mov ah, '_'
-    ; loop through headers
 .loop_headers:
-    ; First, lets check that this segment should be loaded
-
     cmp dword [rbx], 1 ; load: this is important
     jne .next   ; if not important: continue
 
@@ -150,9 +146,9 @@ over:
 
     ; looks good, going to jump to kernel entry
     ; prints green "JK" for "Jump to Kernel"
+    ; mov dword [0xb8000 + 80*4], 0x2f6b2f6a
     mov dword [0xb8000 + 80*4], 0x2f6b2f6a
-    hlt
-    ;jmp KERNEL_LOCATION ; jump to kernel
+    jmp KERNEL_LOCATION ; jump to kernel
 
 ata_lab_mode:
     pushfq
@@ -212,14 +208,13 @@ ata_lab_mode:
     pop rax
     popfq
     ret
-done:
-    mov dword [0xb8000], 0x2f4b2f4f
-    hlt
 
 error:
-    mov byte  [0xb8000], al
-    mov byte  [0xb8002], ah
+    mov dword [0xb8000], 0x4f524f45
+    mov dword [0xb8004], 0x4f4f4f52
+    mov dword [0xb8008], 0x4f3a4f52
+    mov ah, 0x4f
+    mov word  [0xb800c], ax
     hlt
 
-kernel_sectors: dw 0
 times (0x200-($-$$)) db 0 ; fill a sector 

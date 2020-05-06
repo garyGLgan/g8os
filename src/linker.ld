@@ -5,23 +5,24 @@ SECTIONS {
     . = 0x1000000;
 
     /* ensure that the bootloader entry code is at the beginning */
-    .entry : ALIGN(0x8) {
+    .entry  : 
+    {
         KEEP(*(.entry))
     }
 
-    .text : ALIGN(0x8) {
+    .text : {
         *(.text .text.*)
     }
 
-    .rodata : ALIGN(0x8) {
+    .rodata : {
         KEEP(*(.rodata .rodata.*))
     }
 
-    .data : ALIGN(0x8) {
+    .data : {
         *(.data .data.*)
     }
 
-    .bss : ALIGN(0x8) {
+    .bss : {
         *(.bss .bss.*)
     }
 }

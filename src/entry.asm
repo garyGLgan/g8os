@@ -1,12 +1,12 @@
 [BITS 64]
 
 global start
-extern g8_main
+extern g8start
 
 section .entry
 start:
     cli
-
+   
     ; update segments
     mov dx, 0x10
     mov ss, dx  ; stack segment
@@ -19,10 +19,10 @@ start:
     mov rsp, stack_top
 
     ; jump to bootloader
-    jmp g8_main
+    jmp g8start
 
 ; reserve space for stack
 section .bss
 stack_bottom:
-    resb (4096*100)
+    resb (4096*1024)
 stack_top:

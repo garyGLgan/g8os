@@ -22,8 +22,9 @@ use core::panic::PanicInfo;
 
 pub mod vga_buffer;
 
+#[naked]
 #[no_mangle]
-pub unsafe extern "C" fn g8_main() {
+pub unsafe extern "C" fn g8start() {
     println!("welcome to G8 OS!!!");
     hlt_loop()
 }
@@ -37,6 +38,7 @@ pub fn hlt_loop() -> ! {
 
 
 #[panic_handler]
+#[no_mangle]
 fn panic(info: &PanicInfo) -> ! {
     println!("Panic: {}", info);
     hlt_loop();

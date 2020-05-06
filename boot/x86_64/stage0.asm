@@ -33,7 +33,6 @@ boot:
     int 0x13
     jc print_error
 
-
     ; enable a20
     ; http://wiki.osdev.org/A20_Line
     in al, 0x92
