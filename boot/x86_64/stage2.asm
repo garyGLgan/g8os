@@ -4,7 +4,6 @@
 [ORG 0x8000]
 
 stage2:
-    cli
     ; update segments
     mov dx, GDT_SELECTOR_DATA
     mov ss, dx  ; stack segment
@@ -17,6 +16,8 @@ stage2:
     mov rbx, rax
     mov rcx, rax
     mov rdx, rax
+
+    mov rsp, 0x7c00
 
     mov dword [0xb8000], 0x2f332f30
 
@@ -131,9 +132,6 @@ loaded:
 .next:
     add rbx, 0x38   ; skip entry (0x38 is entry size)
     loop .loop_headers
-
-
-    ; ELF relocation done
 over:
 
     ; looks good, going to jump to kernel entry

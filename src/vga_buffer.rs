@@ -3,13 +3,13 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 use volatile::Volatile;
 
-lazy_static! {
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
-        col_pos: 0,
-        color_code: ColorCode::new(Color::Yellow, Color::Black),
-        buffer: unsafe { &mut *(0xb800 as *mut Buffer) },
-    });
-}
+// lazy_static! {
+//     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
+//         col_pos: 0,
+//         color_code: ColorCode::new(Color::Yellow, Color::Black),
+//         buffer: unsafe { &mut *(0xb800 as *mut Buffer) },
+//     });
+// }
 
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -127,20 +127,20 @@ impl fmt::Write for Writer {
     }
 }
 
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
-}
+// #[macro_export]
+// macro_rules! print {
+//     ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
+// }
 
-#[macro_export]
-macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n",  format_args!($($arg)*)));
-}
+// #[macro_export]
+// macro_rules! println {
+//     () => ($crate::print!("\n"));
+//     ($($arg:tt)*) => ($crate::print!("{}\n",  format_args!($($arg)*)));
+// }
 
-#[doc(hidden)]
-pub fn _print(args: fmt::Arguments) {
-    use core::fmt::Write;
-    use x86_64::instructions::interrupts;
-    interrupts::without_interrupts(|| WRITER.lock().write_fmt(args).unwrap());
-}
+// #[doc(hidden)]
+// pub fn _print(args: fmt::Arguments) {
+//     use core::fmt::Write;
+//     use x86_64::instructions::interrupts;
+//     interrupts::without_interrupts(|| WRITER.lock().write_fmt(args).unwrap());
+// }

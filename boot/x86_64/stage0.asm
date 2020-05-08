@@ -89,7 +89,6 @@ boot:
 
     jmp 0x08:0x7e00
 
-    hlt
 print_string:    ; prints E and one letter from al and terminates, (error in boot sector 0)
     lodsb        ; grab a byte from SI
  
@@ -179,13 +178,14 @@ get_memory_map:
 	stc	                       ; "function unsupported" error exit, set carry
 	ret
 
+idtr32:
+    dw 0
+    dd 0
+
 gdtr32:
     dw gdt32_begin - gdt32_end - 1  ; size
     dd gdt32_begin                  ; offset
 
-idtr32:
-    dw 0
-    dd 0
 
 gdt32_begin:  ; from AMD64 system programming manual, page 132
     ; null entry

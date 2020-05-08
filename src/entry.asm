@@ -5,9 +5,7 @@ global start
 extern g8start
 
 section .entry
-start:
-    cli
-   
+start:   
     ; update segments
     mov dx, GDT_SELECTOR_DATA
     mov ss, dx  ; stack segment

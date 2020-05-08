@@ -18,7 +18,7 @@ all: $(img)
 
 clean:
 	@rm -r build
-	@rm $(kernel_lib)
+	@rm -r target/$(arch)-$(os_name)/
 
 $(kernel_entry_lib): $(kernel_entry_src)
 	nasm -f elf64 -o $(kernel_entry_lib) $(kernel_entry_src)

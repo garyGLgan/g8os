@@ -18,16 +18,15 @@
 #![feature(trait_alias)]
 #![feature(try_trait)]
 
-use core::panic::PanicInfo;
-
 pub mod vga_buffer;
+
+use core::panic::PanicInfo;
 
 #[naked]
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
     use x86_64::instructions::interrupts;
-
-    interrupts::without_interrupts(|| vga_buffer::WRITER.lock().write_byte('a' as u8));
+    interrupts::without_interrupts(|| print_str("Hello world!"));
     hlt_loop()
 }
 
@@ -37,8 +36,21 @@ pub fn hlt_loop() -> ! {
     }
 }
 
+pub fn print_str(s: &str) {
+    let vga_buf = 0xb8000 as *mut u8;
+
+    for (i, &byte) in s.as_bytes().iter().enumerate() {
+        unsafe {
+            *vga_buf.offset((i as isize) * 2) = byte;
+            *vga_buf.offset((i as isize) * 2 + 1) = 0xb;
+        }
+    }
+}
+
 #[panic_handler]
 #[no_mangle]
 fn panic(info: &PanicInfo) -> ! {
+    use x86_64::instructions::interrupts;
+    interrupts::without_interrupts(|| print_str("ERROR!"));
     hlt_loop();
 }
