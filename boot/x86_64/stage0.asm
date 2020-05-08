@@ -85,48 +85,17 @@ boot:
 
     ;jmp 0x08:0x7e00
     hlt
-print_string:    ; prints E and one letter from al and terminates, (error in boot sector 0)
-    lodsb        ; grab a byte from SI
- 
-    or al, al  ; logical or AL by itself
-    jz .done   ; if the result is zero, get out
-    
-    mov ah, 0x0E
-    int 0x10      ; otherwise, print out the character!
-    
-    jmp print_string
-    
-.done:
-    ret
 
 print_error:    ; prints E and one letter from al and terminates, (error in boot sector 0)
     push ax
         mov si, err
-        call print_string
+        call print
     pop ax
     mov ah, 0x0e
     int 0x10
     hlt
 
 
-ALIGN 4
-err db 'Error:', 0x0D, 0x0A, 0
-
-da_packet:
-    db 16               ; size of this packet (constant)
-    db 0                ; reserved (always zero)
-.count:
-    dw BOOTLOADER_SECTOR_COUNT    ; count (how many sectors)
-.address:                               ; ^ (127 might be a limit here, still 0xFF on most BIOSes)
-    dw STAGE_1_LOADPOINT ; offset (where)
-.segment:
-    dw 0                ; segment
-.lba_low:
-    dq 1                ; lba low (position on disk)
-.lba_high:
-    dq 0                ; lba high
-
-; http://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15.2C_EAX_.3D_0xE820
 get_memory_map:
     mov di, (BOOT_TMP_MMAP_BUFFER+2)
 	xor ebx, ebx               ; ebx must be 0 to start
@@ -179,25 +148,37 @@ print_mmap:
     mov si, mm
     call print
     mov byte al, ' '
-    call print_char
-    mov word bx, [di]
-    call print_hex
-    mov word bx, [di+2]
+
+    mov word bx, [di+6]
     call print_hex
     mov word bx, [di+4]
     call print_hex
-    mov word bx, [di+6]
+
+
+    mov byte al, '_'
+    call print_char
+
+    call print_char
+    mov word bx, [di+2]
     call print_hex
+    mov word bx, [di]
+    call print_hex
+    
     mov byte al, ' '
     call print_char
-    mov word bx, [di+8]
-    call print_hex
-    mov word bx, [di+10]
+    mov word bx, [di+14]
     call print_hex
     mov word bx, [di+12]
     call print_hex
-    mov word bx, [di+14]
+
+    mov byte al, '_'
+    call print_char
+    
+    mov word bx, [di+10]
     call print_hex
+    mov word bx, [di+8]
+    call print_hex
+
     call print_line
     popa
     ret
@@ -256,6 +237,26 @@ print_hex:
     shl bx, 4
     loop .lp
     ret
+
+ALIGN 4
+err db 'Error:', 0x0D, 0x0A, 0
+
+da_packet:
+    db 16               ; size of this packet (constant)
+    db 0                ; reserved (always zero)
+.count:
+    dw BOOTLOADER_SECTOR_COUNT    ; count (how many sectors)
+.address:                               ; ^ (127 might be a limit here, still 0xFF on most BIOSes)
+    dw STAGE_1_LOADPOINT ; offset (where)
+.segment:
+    dw 0                ; segment
+.lba_low:
+    dq 1                ; lba low (position on disk)
+.lba_high:
+    dq 0                ; lba high
+
+; http://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15.2C_EAX_.3D_0xE820
+
 
 
 idtr32:
