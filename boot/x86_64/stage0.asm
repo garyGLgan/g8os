@@ -3,6 +3,8 @@
 [BITS 16]
 [ORG 0x7c00]
 
+global irq0_handler
+
 boot:
     cli                         ; We do not want to be interrupted
     xor ax, ax                  ; 0 AX
@@ -11,12 +13,9 @@ boot:
     mov ss, ax                  ; Set Stack Segment to 0
     mov sp, ax                  ; Set Stack Pointer to 0
 
-    mov sp, 0x7c00              ; initialize stack
+    mov sp, 0x8400              ; initialize stack
 
     mov [BOOT_DRIVER], dl         ; save boot drive
-
-    mov si, welcome
-    call print_string
 
     ; get memory map
     mov al, 'M'                 ; set flag for print error
@@ -72,9 +71,6 @@ boot:
     jc print_error
 
 
-    mov si, done
-    call print_string
-
     mov bh, 0
     mov ah, 2
     mov dx, 0xFFFF
@@ -87,8 +83,8 @@ boot:
     or eax, 1
     mov cr0, eax
 
-    jmp 0x08:0x7e00
-
+    ;jmp 0x08:0x7e00
+    hlt
 print_string:    ; prints E and one letter from al and terminates, (error in boot sector 0)
     lodsb        ; grab a byte from SI
  
@@ -112,11 +108,10 @@ print_error:    ; prints E and one letter from al and terminates, (error in boot
     int 0x10
     hlt
 
-ALIGN 4
-welcome db 'Welcom to G8 OS!', 0x0D, 0x0A, 0
-err db 'Error: ', 0x0D, 0x0A, 0
 
-done db 'Boot success', 0x0D, 0x0A, 0
+ALIGN 4
+err db 'Error:', 0x0D, 0x0A, 0
+
 da_packet:
     db 16               ; size of this packet (constant)
     db 0                ; reserved (always zero)
@@ -166,6 +161,7 @@ get_memory_map:
 	or ecx, [es:di + 12]       ; "or" it with upper uint32_t to test for zero
 	jz .skipent                ; if length uint64_t is 0, skip entry
 	inc bp                     ; got a good entry: ++count, move to next storage spot
+    call print_mmap
 	add di, 24
 .skipent:
 	test ebx, ebx              ; if ebx resets to 0, list is complete
@@ -177,6 +173,90 @@ get_memory_map:
 .failed:
 	stc	                       ; "function unsupported" error exit, set carry
 	ret
+
+print_mmap:
+    pusha
+    mov si, mm
+    call print
+    mov byte al, ' '
+    call print_char
+    mov word bx, [di]
+    call print_hex
+    mov word bx, [di+2]
+    call print_hex
+    mov word bx, [di+4]
+    call print_hex
+    mov word bx, [di+6]
+    call print_hex
+    mov byte al, ' '
+    call print_char
+    mov word bx, [di+8]
+    call print_hex
+    mov word bx, [di+10]
+    call print_hex
+    mov word bx, [di+12]
+    call print_hex
+    mov word bx, [di+14]
+    call print_hex
+    call print_line
+    popa
+    ret
+
+print_line:
+    mov al, 13
+    call print_char
+    mov al, 10
+    jmp print_char
+
+; print a string
+; IN
+;   si: points at zero-terminated String
+; CLOBBER
+;   si, ax
+print:
+    pushf
+    cld
+.loop:
+    lodsb
+    test al, al
+    jz .done
+    call print_char
+    jmp .loop
+.done:
+    popf
+    ret
+
+; print a character
+; IN
+;   al: character to print
+print_char:
+    pusha
+    mov bx, 7
+    mov ah, 0x0e
+    int 0x10
+    popa
+    ret
+
+; print a number in hex
+; IN
+;   bx: the number
+; CLOBBER
+;   al, cx
+print_hex:
+    mov cx, 4
+.lp:
+    mov al, bh
+    shr al, 4
+    cmp al, 0xA
+    jb .below_0xA
+    add al, 'A' - 0xA - '0'
+.below_0xA:
+    add al, '0'
+    call print_char
+    shl bx, 4
+    loop .lp
+    ret
+
 
 idtr32:
     dw 0
@@ -212,6 +292,8 @@ gdtinfo:
 gdt_begin:  dd 0,0              ; entry 0 is always unused
 flatdesc:   db 0xff, 0xff, 0, 0, 0, 10010010b, 11001111b, 0
 gdt_end:
+
+mm: db 'm:'
 
 times (0x200 - 2) - ($ - $$) db 0
 dw 0xaa55

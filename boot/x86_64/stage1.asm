@@ -13,7 +13,7 @@ stage1:
     mov ss, eax
 
     ; set up stack
-    mov esp, 0x7c00 ; stack grows downwards
+    mov esp, 0x8400 ; stack grows downwards
 
     ; SCREEN: clear screen
     mov ecx, (25 * 80-1) ; / 4
@@ -48,7 +48,7 @@ stage1:
     mov ss, ax
     mov ds, ax
     mov es, ax
-
+    
     ; jump into stage 2, and activate long mode
     ;jmp done
     jmp GDT_SELECTOR_CODE:0x8000

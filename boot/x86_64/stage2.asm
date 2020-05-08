@@ -12,12 +12,12 @@ stage2:
     mov fs, dx  ; f-segment
     mov gs, dx  ; g-segment
 
+    mov rsp, 0x8400
+
     xor rax, rax
     mov rbx, rax
     mov rcx, rax
     mov rdx, rax
-
-    mov rsp, 0x7c00
 
     mov dword [0xb8000], 0x2f332f30
 
@@ -75,6 +75,8 @@ ata_loop:
     mov cl, bl
     call ata_lab_mode
     
+    mov dword [0xb8000 + 80*10], 0x026b026a
+    jmp KERNEL_LOCATION ; jump to kernel
 loaded:
     ; Parse program headers
     ; http://wiki.osdev.org/ELF#Program_header
@@ -122,12 +124,11 @@ loaded:
 
     ; rcx = p_filesz
     mov rcx, [rbx + 32]
-
     ; <2> copy p_filesz bytes from p_offset to p_vaddr
     ; uses: rsi, rdi, rcx
     rep movsb
     ; </2>
-
+    
     pop rcx
 .next:
     add rbx, 0x38   ; skip entry (0x38 is entry size)

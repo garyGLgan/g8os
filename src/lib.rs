@@ -18,7 +18,7 @@
 #![feature(trait_alias)]
 #![feature(try_trait)]
 
-pub mod vga_buffer;
+
 
 use core::panic::PanicInfo;
 
@@ -26,7 +26,9 @@ use core::panic::PanicInfo;
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
     use x86_64::instructions::interrupts;
+
     interrupts::without_interrupts(|| print_str("Hello world!"));
+    
     hlt_loop()
 }
 

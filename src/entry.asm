@@ -15,7 +15,6 @@ start:
     mov gs, dx  ; g-segment
     ; set up stack
     mov rsp, stack_top
-
     ; jump to bootloader
     jmp g8start
     ;hlt
