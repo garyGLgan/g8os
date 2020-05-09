@@ -6,6 +6,7 @@ extern g8start
 
 section .entry
 start:   
+    cli
     ; update segments
     mov dx, GDT_SELECTOR_DATA
     mov ss, dx  ; stack segment
@@ -17,9 +18,9 @@ start:
     mov rsp, stack_top
     ; jump to bootloader
     jmp g8start
-    ;hlt
+
 ; reserve space for stack
 section .bss
 stack_bottom:
-    resb (4096*1024)
+    resb (4096*256)
 stack_top:

@@ -3,16 +3,19 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 use volatile::Volatile;
 
+// #[cfg(test)]
+// use crate::{serial_print, serial_println};
+
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
-        col_pos: 0,
+        column_position: 0,
         color_code: ColorCode::new(Color::Yellow, Color::Black),
-        buffer: unsafe { &mut *(0xb800 as *mut Buffer) },
+        buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
     });
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Color {
     Black = 0,
@@ -32,7 +35,7 @@ pub enum Color {
     White = 15,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 struct ColorCode(u8);
 
@@ -42,15 +45,15 @@ impl ColorCode {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 struct ScreenChar {
-    ascii_char: u8,
-    color: ColorCode,
+    ascii_character: u8,
+    color_code: ColorCode,
 }
 
-const BUFFER_WIDTH: usize = 80;
 const BUFFER_HEIGHT: usize = 25;
+const BUFFER_WIDTH: usize = 80;
 
 #[repr(transparent)]
 struct Buffer {
@@ -58,64 +61,61 @@ struct Buffer {
 }
 
 pub struct Writer {
-    col_pos: usize,
+    column_position: usize,
     color_code: ColorCode,
     buffer: &'static mut Buffer,
 }
 
 impl Writer {
-    pub fn write_byte(&mut self, b: u8) {
-        match b {
+    pub fn write_byte(&mut self, byte: u8) {
+        match byte {
             b'\n' => self.new_line(),
-            b => {
-                if self.col_pos >= BUFFER_WIDTH {
+            byte => {
+                if self.column_position >= BUFFER_WIDTH {
                     self.new_line();
                 }
 
-                let r = BUFFER_HEIGHT-1;
-                let c = self.col_pos;
+                let row = BUFFER_HEIGHT - 1;
+                let col = self.column_position;
 
                 let color_code = self.color_code;
-                self.buffer.chars[20][0].write(ScreenChar {
-                    ascii_char: b,
-                    color: color_code,
+                self.buffer.chars[row][col].write(ScreenChar {
+                    ascii_character: byte,
+                    color_code,
                 });
-                self.col_pos += 1;
-                if self.col_pos == BUFFER_WIDTH {
-                    self.new_line();
-                }
+                self.column_position += 1;
             }
-        }
-    }
-
-    pub fn new_line(&mut self) {
-        for r in 1..BUFFER_HEIGHT {
-            for c in 0..BUFFER_WIDTH {
-                let ch = self.buffer.chars[r][c].read();
-                self.buffer.chars[r - 1][c].write(ch);
-            }
-        }
-        self.clear_row(BUFFER_HEIGHT - 1);
-        self.col_pos = 0;
-    }
-
-    pub fn clear_row(&mut self, r: usize) {
-        let blank = ScreenChar {
-            ascii_char: b' ',
-            color: ColorCode(0 as u8),
-        };
-
-        for c in 0..BUFFER_WIDTH {
-            self.buffer.chars[r][c].write(blank);
         }
     }
 
     pub fn write_string(&mut self, s: &str) {
-        for &byte in s.as_bytes().iter() {
+        for byte in s.bytes() {
             match byte {
                 0x20..=0x7e | b'\n' => self.write_byte(byte),
                 _ => self.write_byte(0xfe),
             }
+        }
+    }
+
+    fn new_line(&mut self) {
+        for row in 1..BUFFER_HEIGHT {
+            for col in 0..BUFFER_WIDTH {
+                let character = self.buffer.chars[row][col].read();
+                self.buffer.chars[row - 1][col].write(character);
+            }
+        }
+        self.clear_row(BUFFER_HEIGHT - 1);
+        self.column_position = 0;
+    }
+
+    fn clear_row(&mut self, row: usize) {
+        let blank = ScreenChar {
+            ascii_character: b' ',
+            color_code: self.color_code,
+        };
+
+        for col in 0..BUFFER_WIDTH {
+            self.buffer.chars[row][col].write(blank);
         }
     }
 }
@@ -128,19 +128,59 @@ impl fmt::Write for Writer {
 }
 
 #[macro_export]
-macro_rules! gprint {
+macro_rules! print {
     ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
 }
 
 #[macro_export]
-macro_rules! gprintln {
+macro_rules! println {
     () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::gprint!("{}\n",  format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::print!("{}\n",  format_args!($($arg)*)));
 }
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
     use x86_64::instructions::interrupts;
-    interrupts::without_interrupts(|| WRITER.lock().write_fmt(args).unwrap());
+
+    interrupts::without_interrupts(|| {
+        WRITER.lock().write_fmt(args).unwrap();
+    });
 }
+
+// #[test_case]
+// fn test_println_simple() {
+//     serial_print!("test_println...");
+//     println!("test_println_simple output");
+//     serial_println!("[Ok]");
+// }
+
+// #[test_case]
+// fn test_println_many() {
+//     serial_print!("test_println_many...");
+//     for _ in 0..200 {
+//         println!("test_println_many output");
+//     }
+//     serial_println!("[Ok]");
+// }
+
+// #[test_case]
+// fn test_println_output() {
+//     use core::fmt::Write;
+//     use x86_64::instructions::interrupts;
+
+//     serial_print!("test_println_output");
+
+//     let s = "Some test string that fits on a single line";
+
+//     interrupts::without_interrupts(|| {
+//         let mut writer = WRITER.lock();
+//         writeln!(writer, "\n{}", s).expect("writerln failed");
+
+//         for (i, c) in s.chars().enumerate() {
+//             let screen_char = writer.buffer.chars[BUFFER_HEIGHT - 2][i].read();
+//             assert_eq!(char::from(screen_char.ascii_character), c);
+//         }
+//     });
+//     serial_println!("[Ok]");
+// }

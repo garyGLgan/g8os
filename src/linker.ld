@@ -2,27 +2,31 @@ OUTPUT_FORMAT(elf64-x86-64)
 ENTRY(start)
 
 SECTIONS {
-    . = 0x1000000;
+    . = 0x200000;
 
     /* ensure that the bootloader entry code is at the beginning */
-    .entry  : 
+    .entry : ALIGN(0x8) 
     {
         KEEP(*(.entry))
     }
 
-    .text : {
+    .text : ALIGN(0x8) 
+    {
         *(.text .text.*)
     }
 
-    .rodata : {
+    .rodata : ALIGN(0x8)
+    {
         KEEP(*(.rodata .rodata.*))
     }
 
-    .data : {
+    .data : ALIGN(0x8)
+    {
         *(.data .data.*)
     }
 
-    .bss : {
+    .bss : ALIGN(0x8)
+    {
         *(.bss .bss.*)
     }
 }

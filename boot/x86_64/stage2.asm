@@ -5,6 +5,7 @@
 
 stage2:
     ; update segments
+    cli
     mov dx, GDT_SELECTOR_DATA
     mov ss, dx  ; stack segment
     mov ds, dx  ; data segment
@@ -12,12 +13,10 @@ stage2:
     mov fs, dx  ; f-segment
     mov gs, dx  ; g-segment
 
-    mov rsp, 0x8400
+    mov rsp, 0x7c00
 
-    xor rax, rax
-    mov rbx, rax
-    mov rcx, rax
-    mov rdx, rax
+    mov qword [DEBUG_POINT], 0
+    mov qword [DEBUG_POINT+8], 16 
 
     mov dword [0xb8000], 0x2f332f30
 
@@ -51,33 +50,36 @@ stage2:
     ; get how many sectors of kernel in the disk need to be loaded to memory
     ; size = elf_shoff + elf_shentsize * elf_shentnum, sectors = ( (size + 511) >> 9 )-1
     ; the first sector have been loaded at
+  
+    xor rax, rax
+    mov rbx, rax
+    mov rcx, rax
+    mov rdx, rax 
     mov ax, word [KERNEL_LOADPOINT + 58]
-    mov bx, word [KERNEL_LOADPOINT + 60] 
-    imul ebx, eax
-    mov rcx, qword [KERNEL_LOADPOINT + 40]
-    add rbx, rcx, 
-    add rbx, 0x1ff
-    shr rbx, 9
-
-    mov eax, 3
-    mov rdi, KERNEL_TMP_LOAD_POINT
-
-ata_loop:
-    cmp rbx, 0x10
-    jbe .ata_last
-    mov cl, 0x10
-    call ata_lab_mode
-    sub rbx, 0x10
-    add eax, 0x10
-    add rdi, 0x10 * 0x200 
-    jmp ata_loop
-.ata_last:
-    mov cl, bl
-    call ata_lab_mode
+    mov cx, word [KERNEL_LOADPOINT + 60] 
+    imul ecx, eax
+    add rcx, qword [KERNEL_LOADPOINT + 40], 
     
-    mov dword [0xb8000 + 80*10], 0x026b026a
-    jmp KERNEL_LOCATION ; jump to kernel
+    add rcx, 0x1ff
+    shr rcx, 9
+
+    mov rdi, KERNEL_TMP_LOAD_POINT
+    mov rax, 3
+.ata_loop:
+    push rcx
+    xor rcx, rcx
+    mov cl,1
+    call ata_lab_mode
+    inc rax
+    add rdi, 0x200 
+    pop rcx
+    loop .ata_loop
+
 loaded:
+    xor rax, rax
+    mov rbx, rax
+    mov rcx, rax
+    mov rdx, rax 
     ; Parse program headers
     ; http://wiki.osdev.org/ELF#Program_header
     mov al, 'H'
@@ -89,7 +91,6 @@ loaded:
 
     ; bitness and instruction set (must be 64, so values must be 2 and 0x3e) (error code: "EB")
    
-    
     ; program header table position
     mov rbx, qword [KERNEL_TMP_LOAD_POINT + 32]
     add rbx, KERNEL_TMP_LOAD_POINT ; now rbx points to first program header
@@ -101,7 +102,7 @@ loaded:
 .loop_headers:
     cmp dword [rbx], 1 ; load: this is important
     jne .next   ; if not important: continue
-
+    
     push rcx
     mov rsi, [rbx + 8]
     add rsi, KERNEL_TMP_LOAD_POINT  ; now points to begin of buffer we must copy
@@ -121,25 +122,36 @@ loaded:
     loop .loop_clear
     pop rdi
     ; </1>
-
     ; rcx = p_filesz
     mov rcx, [rbx + 32]
-    ; <2> copy p_filesz bytes from p_offset to p_vaddr
-    ; uses: rsi, rdi, rcx
     rep movsb
-    ; </2>
-    
+
+    ; </2>    
     pop rcx
 .next:
     add rbx, 0x38   ; skip entry (0x38 is entry size)
     loop .loop_headers
-over:
 
-    ; looks good, going to jump to kernel entry
-    ; prints green "JK" for "Jump to Kernel"
-    mov dword [0xb8000 + 80*10], 0x2f6b2f6a
-    jmp KERNEL_LOCATION ; jump to kernel
-    
+over:
+    mov dword [0xb8000], 0x2f6b2f6a
+    jmp KERNEL_LOCATION
+
+;debug:
+;    push rbx
+;    mov rbx, 0
+;    mov qword rbx, [DEBUG_POINT+8]
+;    add rbx, DEBUG_POINT
+;    mov qword [rbx], rax
+;    mov rax, 8
+;    call re_daddr
+;    pop rbx
+;    ret
+;re_daddr:
+;    add rax, [DEBUG_POINT+8]
+;    mov qword [DEBUG_POINT+8],rax
+;    ret
+
+
 ata_lab_mode:
     pushfq
     and rax, 0x0FFFFFFF
@@ -199,6 +211,7 @@ ata_lab_mode:
     pop rax
     popfq
     ret
+
 
 error:
     mov dword [0xb8000], 0x4f524f45

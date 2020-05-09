@@ -13,7 +13,7 @@ boot:
     mov ss, ax                  ; Set Stack Segment to 0
     mov sp, ax                  ; Set Stack Pointer to 0
 
-    mov sp, 0x8400              ; initialize stack
+    mov sp, 0x7c00              ; initialize stack
 
     mov [BOOT_DRIVER], dl         ; save boot drive
 
@@ -83,8 +83,8 @@ boot:
     or eax, 1
     mov cr0, eax
 
-    ;jmp 0x08:0x7e00
-    hlt
+    jmp 0x08:0x7e00
+    ; hlt
 
 print_error:    ; prints E and one letter from al and terminates, (error in boot sector 0)
     push ax
@@ -256,8 +256,6 @@ da_packet:
     dq 0                ; lba high
 
 ; http://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15.2C_EAX_.3D_0xE820
-
-
 
 idtr32:
     dw 0
