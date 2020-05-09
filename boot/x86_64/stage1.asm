@@ -16,12 +16,12 @@ stage1:
     mov esp, 0x7c00 ; stack grows downwards
 
     ; SCREEN: clear screen
-    mov ecx, (25 * 80 * 2) ; / 4
+    mov ecx, (25 * 80-1) ; / 4
 .clear_screen_lp:
-    mov eax,  ecx
-    shl eax, 2 ; multiply by 4
+    mov eax, ecx
+    shl eax, 1 ; multiply by 4
     add eax, 0xb8000
-    mov dword [eax], 0x00200020
+    mov word [eax], 0x0020
     loop .clear_screen_lp
 
     call check_long_mode
@@ -48,11 +48,10 @@ stage1:
     mov ss, ax
     mov ds, ax
     mov es, ax
-
-jmp done
-
+    
     ; jump into stage 2, and activate long mode
-    ; jmp GDT_SELECTOR_CODE:0x8000
+    ;jmp done
+    jmp GDT_SELECTOR_CODE:0x8000
 
 ; enable SSE
 ;https://wiki.osdev.org/SSE
@@ -170,7 +169,6 @@ enable_paging:
     mov cr0, eax
 
     ret
-
 
 tmp_gdt64:
     dq 0 ; zero entry

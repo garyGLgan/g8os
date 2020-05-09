@@ -3,6 +3,8 @@
 [BITS 16]
 [ORG 0x7c00]
 
+global irq0_handler
+
 boot:
     cli                         ; We do not want to be interrupted
     xor ax, ax                  ; 0 AX
@@ -14,9 +16,6 @@ boot:
     mov sp, 0x7c00              ; initialize stack
 
     mov [BOOT_DRIVER], dl         ; save boot drive
-
-    mov si, welcome
-    call print_string
 
     ; get memory map
     mov al, 'M'                 ; set flag for print error
@@ -32,7 +31,6 @@ boot:
     mov dl, 0x80
     int 0x13
     jc print_error
-
 
     ; enable a20
     ; http://wiki.osdev.org/A20_Line
@@ -73,9 +71,6 @@ boot:
     jc print_error
 
 
-    mov si, done
-    call print_string
-
     mov bh, 0
     mov ah, 2
     mov dx, 0xFFFF
@@ -89,51 +84,18 @@ boot:
     mov cr0, eax
 
     jmp 0x08:0x7e00
-
-    hlt
-print_string:    ; prints E and one letter from al and terminates, (error in boot sector 0)
-    lodsb        ; grab a byte from SI
- 
-    or al, al  ; logical or AL by itself
-    jz .done   ; if the result is zero, get out
-    
-    mov ah, 0x0E
-    int 0x10      ; otherwise, print out the character!
-    
-    jmp print_string
-    
-.done:
-    ret
+    ; hlt
 
 print_error:    ; prints E and one letter from al and terminates, (error in boot sector 0)
     push ax
         mov si, err
-        call print_string
+        call print
     pop ax
     mov ah, 0x0e
     int 0x10
     hlt
 
-ALIGN 4
-welcome db 'Welcom to G8 OS!', 0x0D, 0x0A, 0
-err db 'Error: ', 0x0D, 0x0A, 0
 
-done db 'Boot success', 0x0D, 0x0A, 0
-da_packet:
-    db 16               ; size of this packet (constant)
-    db 0                ; reserved (always zero)
-.count:
-    dw (BOOTLOADER_SECTOR_COUNT - 1)    ; count (how many sectors)
-.address:                               ; ^ (127 might be a limit here, still 0xFF on most BIOSes)
-    dw STAGE_1_LOADPOINT ; offset (where)
-.segment:
-    dw 0                ; segment
-.lba_low:
-    dq 1                ; lba low (position on disk)
-.lba_high:
-    dq 0                ; lba high
-
-; http://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15.2C_EAX_.3D_0xE820
 get_memory_map:
     mov di, (BOOT_TMP_MMAP_BUFFER+2)
 	xor ebx, ebx               ; ebx must be 0 to start
@@ -168,6 +130,7 @@ get_memory_map:
 	or ecx, [es:di + 12]       ; "or" it with upper uint32_t to test for zero
 	jz .skipent                ; if length uint64_t is 0, skip entry
 	inc bp                     ; got a good entry: ++count, move to next storage spot
+    call print_mmap
 	add di, 24
 .skipent:
 	test ebx, ebx              ; if ebx resets to 0, list is complete
@@ -180,13 +143,128 @@ get_memory_map:
 	stc	                       ; "function unsupported" error exit, set carry
 	ret
 
-gdtr32:
-    dw gdt32_begin - gdt32_end - 1  ; size
-    dd gdt32_begin                  ; offset
+print_mmap:
+    pusha
+    mov si, mm
+    call print
+    mov byte al, ' '
+
+    mov word bx, [di+6]
+    call print_hex
+    mov word bx, [di+4]
+    call print_hex
+
+
+    mov byte al, '_'
+    call print_char
+
+    call print_char
+    mov word bx, [di+2]
+    call print_hex
+    mov word bx, [di]
+    call print_hex
+    
+    mov byte al, ' '
+    call print_char
+    mov word bx, [di+14]
+    call print_hex
+    mov word bx, [di+12]
+    call print_hex
+
+    mov byte al, '_'
+    call print_char
+    
+    mov word bx, [di+10]
+    call print_hex
+    mov word bx, [di+8]
+    call print_hex
+
+    call print_line
+    popa
+    ret
+
+print_line:
+    mov al, 13
+    call print_char
+    mov al, 10
+    jmp print_char
+
+; print a string
+; IN
+;   si: points at zero-terminated String
+; CLOBBER
+;   si, ax
+print:
+    pushf
+    cld
+.loop:
+    lodsb
+    test al, al
+    jz .done
+    call print_char
+    jmp .loop
+.done:
+    popf
+    ret
+
+; print a character
+; IN
+;   al: character to print
+print_char:
+    pusha
+    mov bx, 7
+    mov ah, 0x0e
+    int 0x10
+    popa
+    ret
+
+; print a number in hex
+; IN
+;   bx: the number
+; CLOBBER
+;   al, cx
+print_hex:
+    mov cx, 4
+.lp:
+    mov al, bh
+    shr al, 4
+    cmp al, 0xA
+    jb .below_0xA
+    add al, 'A' - 0xA - '0'
+.below_0xA:
+    add al, '0'
+    call print_char
+    shl bx, 4
+    loop .lp
+    ret
+
+ALIGN 4
+err db 'Error:', 0x0D, 0x0A, 0
+
+da_packet:
+    db 16               ; size of this packet (constant)
+    db 0                ; reserved (always zero)
+.count:
+    dw BOOTLOADER_SECTOR_COUNT    ; count (how many sectors)
+.address:                               ; ^ (127 might be a limit here, still 0xFF on most BIOSes)
+    dw STAGE_1_LOADPOINT ; offset (where)
+.segment:
+    dw 0                ; segment
+.lba_low:
+    dq 1                ; lba low (position on disk)
+.lba_high:
+    dq 0                ; lba high
+
+; http://wiki.osdev.org/Detecting_Memory_(x86)#BIOS_Function:_INT_0x15.2C_EAX_.3D_0xE820
 
 idtr32:
     dw 0
     dd 0
+
+gdtr32:
+    dw gdt32_begin - gdt32_end - 1  ; size
+    dd gdt32_begin                  ; offset
+
 
 gdt32_begin:  ; from AMD64 system programming manual, page 132
     ; null entry
@@ -213,6 +291,8 @@ gdtinfo:
 gdt_begin:  dd 0,0              ; entry 0 is always unused
 flatdesc:   db 0xff, 0xff, 0, 0, 0, 10010010b, 11001111b, 0
 gdt_end:
+
+mm: db 'm:'
 
 times (0x200 - 2) - ($ - $$) db 0
 dw 0xaa55
