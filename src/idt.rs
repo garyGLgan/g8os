@@ -26,6 +26,8 @@ lazy_static! {
                 .set_stack_index(0 as u16);
         }
         idt.page_fault.set_handler_fn(page_fault_handler);
+        idt.general_protection_fault
+            .set_handler_fn(general_protected_handler);
         idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
         idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
         idt[(PIC_1_OFFSET + 11) as usize].set_handler_fn(network_interrupt_handler);
@@ -104,6 +106,20 @@ extern "x86-interrupt" fn page_fault_handler(
 
     println!("EXCEPTION: PAGE FAULT");
     println!("Accessed Address: {:?}", Cr2::read());
+    println!("Error Code: {:?}", error_code);
+    println!("{:#?}", stack_frame);
+    hlt_loop();
+    unsafe {
+        PICS.lock()
+            .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
+    }
+}
+
+extern "x86-interrupt" fn general_protected_handler(
+    stack_frame: &mut InterruptStackFrame,
+    error_code: u64,
+) {
+    println!("EXCEPTION: GENERAL PROTECT");
     println!("Error Code: {:?}", error_code);
     println!("{:#?}", stack_frame);
     hlt_loop();
