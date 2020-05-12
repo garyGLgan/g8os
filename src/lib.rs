@@ -15,6 +15,7 @@ pub unsafe extern "C" fn g8start() {
     println!("Welcom to G8 OS!");
     println!("Auth: Gary Gan");
     init();
+    stack_overflow();
     hlt_loop()
 }
 
@@ -22,6 +23,10 @@ pub fn hlt_loop() -> ! {
     loop {
         x86_64::instructions::hlt();
     }
+}
+
+fn stack_overflow() {
+    stack_overflow(); 
 }
 
 pub fn init() {
