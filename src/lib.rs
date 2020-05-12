@@ -8,6 +8,7 @@
 use core::panic::PanicInfo;
 pub mod gdt;
 pub mod idt;
+pub mod memory;
 pub mod vga_buffer;
 
 #[no_mangle]
@@ -26,7 +27,7 @@ pub fn hlt_loop() -> ! {
 }
 
 fn stack_overflow() {
-    stack_overflow(); 
+    stack_overflow();
 }
 
 pub fn init() {
