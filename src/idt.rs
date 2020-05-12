@@ -1,5 +1,5 @@
 use crate::hlt_loop;
-// use crate::{print, println};
+use crate::{print, println};
 use lazy_static::lazy_static;
 use pic8259_simple::ChainedPics;
 use spin;
@@ -26,9 +26,9 @@ lazy_static! {
                 .set_stack_index(0 as u16);
         }
         idt.page_fault.set_handler_fn(page_fault_handler);
+        idt.general_protection_fault.set_handler_fn(general_protected_handler);
         idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
         idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
-        idt[(PIC_1_OFFSET+11) as usize].set_handler_fn(network_interrupt_handler);
         idt
     };
 }
@@ -55,7 +55,7 @@ impl InterruptIndex {
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: &mut InterruptStackFrame) {
-    // println!("EXCEPTION: BREAKPOINT\n{:#?}", stack_frame);
+    println!("EXCEPTION: BREAKPOINT\n{:#?}", stack_frame);
 }
 
 extern "x86-interrupt" fn double_fault_handler(
@@ -64,8 +64,8 @@ extern "x86-interrupt" fn double_fault_handler(
 ) ->  ! {
     panic!("EXCEPTION: DOUBLE FAULT \n{:#?}", stack_frame);
 }
-
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: &mut InterruptStackFrame) {
+    print!(".");
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
@@ -73,25 +73,31 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: &mut InterruptSt
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: &mut InterruptStackFrame) {
-    // use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
-    // use spin::Mutex;
-    // use x86_64::instructions::port::Port;
+    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+    use x86_64::instructions::port::Port;
 
-    // let mut port = Port::new(0x60);
-    // let scancode: u8 = unsafe { port.read() };
-    // crate::task::keyboard::add_scancode(scancode);
+    lazy_static! {
+        static ref KEYBOARD: spin::Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> =
+            spin::Mutex::new(Keyboard::new(layouts::Us104Key, ScancodeSet1,
+                HandleControl::Ignore)
+            );
+    }
+
+    let mut keyboard = KEYBOARD.lock();
+    let mut port = Port::new(0x60);
+    let scancode: u8 = unsafe { port.read() };
+    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
+        if let Some(key) = keyboard.process_keyevent(key_event) {
+            match key {
+                DecodedKey::Unicode(character) => print!("{}", character),
+                DecodedKey::RawKey(key) => print!("{:?}", key),
+            }
+        }
+    }
 
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
-    }
-}
-
-extern "x86-interrupt" fn network_interrupt_handler(_stack_frame: &mut InterruptStackFrame) {
-    // println!("handle a interrupt from network: {:?}", _stack_frame);
-    unsafe {
-        PICS.lock()
-            .notify_end_of_interrupt((PIC_1_OFFSET+11) as u8);
     }
 }
 
@@ -101,15 +107,21 @@ extern "x86-interrupt" fn page_fault_handler(
 ) {
     use x86_64::registers::control::Cr2;
 
-    // println!("EXCEPTION: PAGE FAULT");
-    // println!("Accessed Address: {:?}", Cr2::read());
-    // println!("Error Code: {:?}", error_code);
-    // println!("{:#?}", stack_frame);
-    // hlt_loop();
-    unsafe {
-        PICS.lock()
-            .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
-    }
+    println!("EXCEPTION: PAGE FAULT");
+    println!("Accessed Address: {:?}", Cr2::read());
+    println!("Error Code: {:?}", error_code);
+    println!("{:#?}", stack_frame);
+    hlt_loop();
+}
+
+extern "x86-interrupt" fn general_protected_handler(
+        stack_frame: &mut InterruptStackFrame,
+        error_code: u64,
+) {
+    println!("EXCEPTION: GENERAL PROTECT");
+    println!("Error Code: {:?}", error_code);
+    println!("{:#?}", stack_frame);
+    hlt_loop();
 }
 
 // #[test_case]
