@@ -139,7 +139,7 @@ set_up_page_tables:
     mov [PAGE_TABLE_P2 + ecx * 8], eax ; map entry
 
     inc ecx
-    cmp ecx, 0x200                  ; is the whole P2 table is mapped?
+    cmp ecx, 0x100                  ; is the whole P2 table is mapped?
     jne .map_page_table_p2_loop     ; next entry
 
     ; done
