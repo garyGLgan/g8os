@@ -4,13 +4,14 @@
 #![feature(alloc_layout_extra)]
 #![feature(const_in_array_repeat_expressions)]
 #![feature(abi_x86_interrupt)]
+#![feature(const_raw_ptr_deref)]
 
 use core::panic::PanicInfo;
 pub mod gdt;
 pub mod idt;
+pub mod kernel_const;
 pub mod memory;
 pub mod vga_buffer;
-pub mod kernel_const;
 
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
