@@ -4,12 +4,13 @@ use x86_64::{
 };
 use crate::kernel_const::{PAGE_TABLE_END, PAGE_TABLE_START,};
 use lazy_static::lazy_static;
+use spin::Mutex;
 
 const FRAME_SIZE: usize = 4096;
 const NUMBER_OF_FRAMES: usize = ((PAGE_TABLE_END - PAGE_TABLE_START) / FRAME_SIZE as u64 - 3) as usize;
 
 lazy_static!{
-    static ref PAGE_TABLE_ALLOC: PageTableAlloc = {
+    static ref PAGE_TABLE_ALLOC: Mutex<PageTableAlloc> = {
         let mut frames = [0; NUMBER_OF_FRAMES];
         for (i, f) in (PAGE_TABLE_START..PAGE_TABLE_END)
             .step_by(FRAME_SIZE)
@@ -17,7 +18,7 @@ lazy_static!{
             .skip(3){
             frames[i] = f;
         }
-        PageTableAlloc { avail_frame: frames, next: 0 }
+        Mutex::new(PageTableAlloc { avail_frame: frames, next: 0 })
     };
 }
 
