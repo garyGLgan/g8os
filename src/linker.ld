@@ -2,7 +2,7 @@ OUTPUT_FORMAT(elf64-x86-64)
 ENTRY(start)
 
 SECTIONS {
-    . = 0x200000;
+    . = 0x400000;
 
     /* ensure that the bootloader entry code is at the beginning */
     .entry : ALIGN(0x8) 

@@ -20,7 +20,7 @@ stage2:
 
     mov dword [0xb8000], 0x2f332f30
 
-    mov al, 'E'
+
 
     ; magic number 0x7f+'ELF'
     cmp dword [KERNEL_HEADER_LOADPOINT], 0x464c457f
@@ -36,17 +36,21 @@ stage2:
     cmp byte [KERNEL_HEADER_LOADPOINT + 5], 0x1
     jne error
 
+    
     ; elf version (must be 1) (error code: "EV")
     cmp byte [KERNEL_HEADER_LOADPOINT + 0x0006], 0x1
     jne error
-
+    mov al, 'F'
+    
     ; Now lets trust it's actually real and valid elf file
 
     ; kernel entry position must be correct
     ; (error code : "Ep")
     cmp qword [KERNEL_HEADER_LOADPOINT + 24], KERNEL_LOCATION
     jne error
-
+    
+    mov al, 'E'
+    
     ; get how many sectors of kernel in the disk need to be loaded to memory
     ; size = elf_shoff + elf_shentsize * elf_shentnum, sectors = ( (size + 511) >> 9 )-1
     ; the first sector have been loaded at

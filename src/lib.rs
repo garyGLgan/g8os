@@ -10,6 +10,7 @@ pub mod gdt;
 pub mod idt;
 pub mod memory;
 pub mod vga_buffer;
+pub mod kernel_const;
 
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
