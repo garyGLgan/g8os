@@ -13,12 +13,13 @@ pub mod kernel_const;
 pub mod memory;
 pub mod vga_buffer;
 
+use memory::frame_controller;
+
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
     println!("Welcom to G8 OS!");
     println!("Auth: Gary Gan");
     init();
-    stack_overflow();
     hlt_loop()
 }
 
@@ -28,15 +29,19 @@ pub fn hlt_loop() -> ! {
     }
 }
 
-fn stack_overflow() {
-    stack_overflow();
-}
+// fn stack_overflow() {
+//     stack_overflow();
+// }
 
 pub fn init() {
     gdt::init();
     idt::init_idt();
     unsafe { idt::PICS.lock().initialize() };
     x86_64::instructions::interrupts::enable();
+    let frame_alloc = &frame_controller::FRAME_ALLOC;
+    println!("Frame allocator initialized!");
+    frame_alloc.print_out();
+    hlt_loop()
 }
 
 #[panic_handler]
