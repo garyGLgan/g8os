@@ -11,8 +11,8 @@ use x86_64::{
 lazy_static! {
     pub static ref FRAME_ALLOC: PhysFrameAllocator = {
         let mut alloc = PhysFrameAllocator::new();
-        let mmap = BOOT_TMP_MMAP_BUFFER as *mut MemoryMapBuffer;
         unsafe {
+            let mmap = &mut *(BOOT_TMP_MMAP_BUFFER as *mut MemoryMapBuffer);
             alloc.init(&mut *mmap);
         }
         alloc

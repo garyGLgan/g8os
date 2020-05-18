@@ -1,1 +1,1 @@
-mod page_table_alloc;
+pub mod g8_page_table;
