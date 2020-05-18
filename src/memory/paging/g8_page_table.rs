@@ -1,4 +1,4 @@
-use x86_64::PhysAddr;
+use x86_64::{PhysAddr, VirtAddr};
 use x86_64::structures::paging::{
     PhysFrame,
     page_table::PageTableFlags, 
@@ -97,15 +97,19 @@ impl<'a> G8PagTable<'a>{
         }
     }
 
-    fn map_to(
+    pub fn map_to(
         &mut self,
-        page: Page<Size2MiB>,
+        addr: VirtAddr,
         frame: UnusedPhysFrame<Size2MiB>,
         flags: PageTableFlags,
     ) -> Result<MapperFlush<Size2MiB>, MapToError<Size2MiB>>{
-        self.inner.map_to(page, frame, flags, &mut self.allocator)
-    }
+        let p = Page::<Size2MiB>::from_start_address(addr);
 
+        match p {
+            Ok(page) => self.inner.map_to(page, frame, flags, &mut self.allocator),
+            _ => Err(MapToError::ParentEntryHugePage),
+        }
+    }
 }
 
 impl<'a> Mapper<Size2MiB> for G8PagTable<'a> {
@@ -138,5 +142,8 @@ impl<'a> Mapper<Size2MiB> for G8PagTable<'a> {
     fn translate_page(&self, page: Page<Size2MiB>) -> Result<PhysFrame<Size2MiB>, TranslateError> {
         self.inner.translate_page(page)
     }
+}
 
+pub fn vaddr_from_table(l4: u32, l3: u32, l2: u32, offset: u32) -> VirtAddr{
+    VirtAddr::new(((l4 as u64) << 39) | ((l3 as u64) << 30) | ((l2  as u64) << 21) | (offset as u64))
 }
