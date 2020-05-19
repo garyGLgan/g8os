@@ -13,23 +13,32 @@ use x86_64::structures::paging::{
     mapper::{PhysToVirt, MapperFlush, MapToError, UnmapError, FlagUpdateError, TranslateError}
 };
 use lazy_static::lazy_static;
-use crate::kernel_const::{FRAME_SIZE, FRAME_SIZE_BIT_WIDTH, PAGE_TABLE_END, PAGE_TABLE_START};
+use crate::kernel_const::{
+    FRAME_SIZE,PAGE_TABLE_P4, PAGE_TABLE_P3, PAGE_TABLE_P2, FRAME_SIZE_BIT_WIDTH, PAGE_TABLE_END, PAGE_TABLE_START};
+use spin::Mutex;
+
 
 pub const PAGE_FRAME_SIZE: usize = 4096;
 pub const NUMBER_OF_FRAMES: usize =
     ((PAGE_TABLE_END - PAGE_TABLE_START) / PAGE_FRAME_SIZE as u64 - 3) as usize;
 
 lazy_static!{
-    pub static ref PAGE_TABLE: G8PagTable<'static> = {
+    pub static ref PAGE_TABLE: Mutex<G8PagTable<'static>> = Mutex::new({
         let l4_table = active_l4_page_table();
-        let mut page_allocator:  PageTableAlloc = {
+        let page_allocator:  PageTableAlloc = {
             let mut frames = [0; NUMBER_OF_FRAMES];
-            for (i, f) in (PAGE_TABLE_START..PAGE_TABLE_END)
+            let mut p = 0;
+            for (i, f) in (PAGE_TABLE_START..(PAGE_TABLE_END-(PAGE_FRAME_SIZE as u64)))
                 .step_by(PAGE_FRAME_SIZE)
                 .enumerate()
-                .skip(3)
             {
-                frames[i] = f;
+                match f {
+                    PAGE_TABLE_P4 | PAGE_TABLE_P2 | PAGE_TABLE_P3 => {},
+                    _ => {
+                        frames[p] = f;
+                        p +=1;
+                    }
+                }
             }
             PageTableAlloc {
                 avail_frame: frames,
@@ -39,7 +48,7 @@ lazy_static!{
         unsafe {
             G8PagTable::new(l4_table, page_allocator)
         }
-    };
+    });
 }
 
 struct PageTableAlloc {
@@ -110,6 +119,14 @@ impl<'a> G8PagTable<'a>{
             _ => Err(MapToError::ParentEntryHugePage),
         }
     }
+
+    pub fn unmap(&mut self, addr: VirtAddr) -> Result<(PhysFrame<Size2MiB>, MapperFlush<Size2MiB>), UnmapError> {
+        let p = Page::<Size2MiB>::from_start_address(addr);
+        match p {
+            Ok(page) => self.inner.unmap(page),
+            _ => Err(UnmapError::PageNotMapped),
+        }
+    } 
 }
 
 impl<'a> Mapper<Size2MiB> for G8PagTable<'a> {

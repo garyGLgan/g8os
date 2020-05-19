@@ -60,7 +60,7 @@ pub struct PhysFrameAllocator {
 
 impl PhysFrameAllocator {
     pub fn new() -> Self {
-        let mut blocks = [None; NUMBER_OF_FREE_BLOCK as usize];
+        let blocks = [None; NUMBER_OF_FREE_BLOCK as usize];
         PhysFrameAllocator {
             blocks,
             start: 0,
@@ -92,7 +92,7 @@ impl PhysFrameAllocator {
         self.end & NUMBER_OF_FREE_MASK
     }
 
-    pub fn add_free_block(&mut self, mut addr: PhysAddr, size: u64) {
+    pub fn add_free_block(&mut self, addr: PhysAddr, size: u64) {
         let mut _addr = addr.as_u64();
         let mut _size = size;
         if !is_align(_addr) {
@@ -103,7 +103,7 @@ impl PhysFrameAllocator {
         self.add_aligned_free_block(PhysAddr::new(_addr), _size);
     }
 
-    pub fn add_aligned_free_block(&mut self, mut addr: PhysAddr, size: u64) {
+    pub fn add_aligned_free_block(&mut self, addr: PhysAddr, size: u64) {
         if self.blocks[self.start as usize].is_none() {
             let _next = self.next();
             self.blocks[self.start as usize] = Some(UnusedBlock {

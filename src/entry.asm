@@ -14,12 +14,8 @@ start:
     mov fs, ax
     mov gs, ax
     ; set up stack
-    mov rsp, stack_top
+    mov rsp, STACK_TOP
     ; jump to bootloader
     jmp g8start
     ;hlt
 ; reserve space for stack
-section .bss
-stack_bottom:
-     resb (4096*256)
-stack_top:
