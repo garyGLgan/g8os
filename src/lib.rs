@@ -23,7 +23,6 @@ pub unsafe extern "C" fn g8start() {
     println!("Welcom to G8 OS!");
     println!("Auth: Gary Gan");
     init();
-    stack_overflow(1);
     hlt_loop()
 }
 
@@ -31,15 +30,6 @@ pub fn hlt_loop() -> ! {
     loop {
         x86_64::instructions::hlt();
     }
-}
-
-fn stack_overflow(mut i : u64) {
-    println!("{}.",i);
-    let j = i +1;
-    for i in 0..10 {
-        x86_64::instructions::hlt();
-    }
-    stack_overflow(j);
 }
 
 pub fn init() {
@@ -56,11 +46,6 @@ pub fn init() {
     }else {
         panic!("unmap failed")
     }
-
-    // let ptr = 0xdffff0 as *mut u64;
-    // unsafe {
-    //     ptr.write(10000);
-    // }
 }
 
 #[panic_handler]

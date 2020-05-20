@@ -4,7 +4,7 @@ use crate::kernel_const::{
 use crate::println;
 use lazy_static::lazy_static;
 use x86_64::{
-    structures::paging::{FrameAllocator, PhysFrame, Size2MiB, UnusedPhysFrame},
+    structures::paging::{FrameDeallocator, FrameAllocator, PhysFrame, Size2MiB, UnusedPhysFrame},
     PhysAddr,
 };
 
@@ -198,5 +198,15 @@ unsafe impl FrameAllocator<Size2MiB> for PhysFrameAllocator {
         } else {
             None
         }
+    }
+}
+
+
+impl FrameDeallocator<Size2MiB> for PhysFrameAllocator {
+    fn deallocate_frame(&mut self, frame: UnusedPhysFrame<Size2MiB>) {
+        let start = frame.frame().start_address();
+
+        self.add_free_block(start, 1);
+
     }
 }
