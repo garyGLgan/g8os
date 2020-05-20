@@ -13,10 +13,11 @@ pub mod kernel_const;
 pub mod memory;
 pub mod vga_buffer;
 
-use memory::frame_controller;
+use memory::frame_controller::FRAME_ALLOC;
 use memory::paging::g8_page_table::PAGE_TABLE;
 use kernel_const::{STACK_BOTTOM, STACK_TOP};
 use x86_64::VirtAddr;
+use x86_64::structures::paging::{UnusedPhysFrame, Size2MiB};
 
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
@@ -37,11 +38,11 @@ pub fn init() {
     idt::init_idt();
     unsafe { idt::PICS.lock().initialize() };
     x86_64::instructions::interrupts::enable();
-    let frame_alloc = &frame_controller::FRAME_ALLOC;
     println!("Frame allocator initialized!");
-    frame_alloc.print_out();
+    FRAME_ALLOC.lock().print_out();
 
     if let Ok((frame, flusher)) = PAGE_TABLE.lock().unmap(VirtAddr::new(STACK_BOTTOM)) {
+        // FRAME_ALLOC.lock().deallocate_frame(UnusedPhysFrame::new(frame));
         flusher.flush();
     }else {
         panic!("unmap failed")

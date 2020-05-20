@@ -7,15 +7,16 @@ use x86_64::{
     structures::paging::{FrameDeallocator, FrameAllocator, PhysFrame, Size2MiB, UnusedPhysFrame},
     PhysAddr,
 };
+use spin::Mutex;
 
 lazy_static! {
-    pub static ref FRAME_ALLOC: PhysFrameAllocator = {
+    pub static ref FRAME_ALLOC: Mutex<PhysFrameAllocator> = {
         let mut alloc = PhysFrameAllocator::new();
         unsafe {
             let mmap = &mut *(BOOT_TMP_MMAP_BUFFER as *mut MemoryMapBuffer);
             alloc.init(&mut *mmap);
         }
-        alloc
+        Mutex::new(alloc)
     };
 }
 #[repr(packed)]
@@ -172,18 +173,6 @@ impl PhysFrameAllocator {
     }
 }
 
-fn align_up(addr: u64) -> u64 {
-    (addr + FRAME_SIZE - 1) >> FRAME_SIZE_BIT_WIDTH << FRAME_SIZE_BIT_WIDTH
-}
-
-fn align_down(addr: u64) -> u64 {
-    addr >> FRAME_SIZE_BIT_WIDTH << FRAME_SIZE_BIT_WIDTH
-}
-
-fn is_align(addr: u64) -> bool {
-    align_down(addr) == addr
-}
-
 unsafe impl FrameAllocator<Size2MiB> for PhysFrameAllocator {
     fn allocate_frame(&mut self) -> Option<UnusedPhysFrame<Size2MiB>> {
         if let Some(ref mut block) = self.blocks[self.start as usize] {
@@ -209,4 +198,17 @@ impl FrameDeallocator<Size2MiB> for PhysFrameAllocator {
         self.add_free_block(start, 1);
 
     }
+}
+
+
+fn align_up(addr: u64) -> u64 {
+    (addr + FRAME_SIZE - 1) >> FRAME_SIZE_BIT_WIDTH << FRAME_SIZE_BIT_WIDTH
+}
+
+fn align_down(addr: u64) -> u64 {
+    addr >> FRAME_SIZE_BIT_WIDTH << FRAME_SIZE_BIT_WIDTH
+}
+
+fn is_align(addr: u64) -> bool {
+    align_down(addr) == addr
 }
