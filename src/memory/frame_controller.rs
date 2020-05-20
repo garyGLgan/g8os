@@ -2,21 +2,22 @@ use crate::kernel_const::{
     BOOT_TMP_MMAP_BUFFER, FRAME_SIZE, FRAME_SIZE_BIT_WIDTH, MEMORY_RESERVED_BELOW,
 };
 use crate::println;
+use crate::util::Locked;
 use lazy_static::lazy_static;
+use spin::Mutex;
 use x86_64::{
-    structures::paging::{FrameDeallocator, FrameAllocator, PhysFrame, Size2MiB, UnusedPhysFrame},
+    structures::paging::{FrameAllocator, FrameDeallocator, PhysFrame, Size2MiB, UnusedPhysFrame},
     PhysAddr,
 };
-use spin::Mutex;
 
 lazy_static! {
-    pub static ref FRAME_ALLOC: Mutex<PhysFrameAllocator> = {
+    pub static ref FRAME_ALLOC: Locked<PhysFrameAllocator> = {
         let mut alloc = PhysFrameAllocator::new();
         unsafe {
             let mmap = &mut *(BOOT_TMP_MMAP_BUFFER as *mut MemoryMapBuffer);
             alloc.init(&mut *mmap);
         }
-        Mutex::new(alloc)
+        Locked::new(alloc)
     };
 }
 #[repr(packed)]
@@ -172,8 +173,8 @@ impl PhysFrameAllocator {
         }
     }
 
-    pub fn deallocate(&mut self, frame: PhysFrame<Size2MiB>){
-        unsafe{
+    pub fn deallocate(&mut self, frame: PhysFrame<Size2MiB>) {
+        unsafe {
             self.deallocate_frame(UnusedPhysFrame::new(frame));
         }
     }
@@ -196,16 +197,13 @@ unsafe impl FrameAllocator<Size2MiB> for PhysFrameAllocator {
     }
 }
 
-
 impl FrameDeallocator<Size2MiB> for PhysFrameAllocator {
     fn deallocate_frame(&mut self, frame: UnusedPhysFrame<Size2MiB>) {
         let start = frame.frame().start_address();
 
         self.add_free_block(start, 1);
-
     }
 }
-
 
 fn align_up(addr: u64) -> u64 {
     (addr + FRAME_SIZE - 1) >> FRAME_SIZE_BIT_WIDTH << FRAME_SIZE_BIT_WIDTH

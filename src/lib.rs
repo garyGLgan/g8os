@@ -6,20 +6,21 @@
 #![feature(abi_x86_interrupt)]
 #![feature(const_raw_ptr_deref)]
 
-extern crate alloc;
+// extern crate alloc;
 
 use core::panic::PanicInfo;
 pub mod gdt;
 pub mod idt;
 pub mod kernel_const;
 pub mod memory;
+pub mod util;
 pub mod vga_buffer;
 
+use kernel_const::{STACK_BOTTOM, STACK_TOP};
 use memory::frame_controller::FRAME_ALLOC;
 use memory::paging::g8_page_table::PAGE_TABLE;
-use kernel_const::{STACK_BOTTOM, STACK_TOP};
+use x86_64::structures::paging::{Size2MiB, UnusedPhysFrame};
 use x86_64::VirtAddr;
-use x86_64::structures::paging::{UnusedPhysFrame, Size2MiB};
 
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
@@ -46,7 +47,7 @@ pub fn init() {
     if let Ok((frame, flusher)) = PAGE_TABLE.lock().unmap(VirtAddr::new(STACK_BOTTOM)) {
         FRAME_ALLOC.lock().deallocate(frame);
         flusher.flush();
-    }else {
+    } else {
         panic!("unmap failed")
     }
 }
