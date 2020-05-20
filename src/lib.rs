@@ -42,7 +42,7 @@ pub fn init() {
     FRAME_ALLOC.lock().print_out();
 
     if let Ok((frame, flusher)) = PAGE_TABLE.lock().unmap(VirtAddr::new(STACK_BOTTOM)) {
-        // FRAME_ALLOC.lock().deallocate_frame(UnusedPhysFrame::new(frame));
+        FRAME_ALLOC.lock().deallocate(frame);
         flusher.flush();
     }else {
         panic!("unmap failed")

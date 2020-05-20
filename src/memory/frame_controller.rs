@@ -157,7 +157,7 @@ impl PhysFrameAllocator {
         }
     }
 
-    pub fn print_out(&self) {
+    pub fn print_out(&mut self) {
         println!("frame allocatr start:{}, end:{}", self.start, self.end);
         let mut curr = self.start;
         while let Some(ref b) = self.blocks[curr as usize] {
@@ -169,6 +169,12 @@ impl PhysFrameAllocator {
                 b.next,
             );
             curr = b.next;
+        }
+    }
+
+    pub fn deallocate(&mut self, frame: PhysFrame<Size2MiB>){
+        unsafe{
+            self.deallocate_frame(UnusedPhysFrame::new(frame));
         }
     }
 }
