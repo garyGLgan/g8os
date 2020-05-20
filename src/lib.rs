@@ -6,6 +6,8 @@
 #![feature(abi_x86_interrupt)]
 #![feature(const_raw_ptr_deref)]
 
+extern crate alloc;
+
 use core::panic::PanicInfo;
 pub mod gdt;
 pub mod idt;
