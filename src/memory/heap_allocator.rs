@@ -1,20 +1,42 @@
-use alloc::alloc::{GlobalAlloc, Layout};
-use memory::frame_controller::FRAME_ALLOC;
+// use alloc::alloc::{GlobalAlloc, Layout};
+use crate::memory::frame_controller::FRAME_ALLOC;
 use spin::Mutex;
 
-struct HeapAllocator<'staticv> {}
+const HEAP_MAX_SIZE: u64 = 0x100000000;
 
-enum HeapBlock {
-    B_8,
-    B_16,
-    B_32,
-    B_64,
-    B_128,
-    B_256,
-    B_512,
-    KB_P,
+
+struct BitMask<'a> {
+    size: u64,
+    inner: &'a mut[u64; HEAP_MAX_SIZE as usize],
 }
 
-impl HeapBlock {
-    pub fn best_match(size: u64) -> HeapBlockSize {}
+impl<'a> BitMask<'a> {
+    fn new (addr: u64, size: u64) -> Self {
+        unsafe{
+            Self{
+                size: size,
+                inner: &mut *(addr as *mut [u64; HEAP_MAX_SIZE as usize]),
+            }
+        }
+    }
+
+    fn set_on(&mut self, pos: u64) {
+        let (p, m) = self.split_pos(pos);
+        self.inner[p] = self.inner[p] | m;
+    }
+
+    fn set_off(&mut self, pos: u64) {
+        let (p, m) = self.split_pos(pos);
+        self.inner[p] = self.inner[p] & !m;  
+    }
+
+    fn split_pos(&self,pos: u64) -> (usize, u64){
+        assert!(pos < self.size);
+        ((pos >> 6) as usize, 1<<(63 - (pos & 0x3f)))
+    }
+
+    fn is_set(&self, pos: u64) -> bool {
+        let (p, m) = self.split_pos(pos);
+        (self.inner[p] & m) != 0
+    }
 }

@@ -51,7 +51,6 @@ impl UnusedBlock {
 }
 
 const NUMBER_OF_FREE_BLOCK: u64 = 1024;
-const NUMBER_OF_FREE_BLOCK_BIT_WIDTH: u64 = 10;
 const NUMBER_OF_FREE_MASK: u64 = 1023;
 
 pub struct PhysFrameAllocator {
