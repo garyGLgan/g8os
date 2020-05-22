@@ -14,7 +14,7 @@ impl<'a> BitMask<'a> {
     fn new (addr: u64, size: u64) -> Self {
         unsafe{
             Self{
-                size: size,
+                size,
                 inner: &mut *(addr as *mut [u64; HEAP_MAX_SIZE as usize]),
             }
         }
