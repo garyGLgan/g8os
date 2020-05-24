@@ -1,19 +1,18 @@
 use spin::{Mutex, MutexGuard};
 use x86_64::VirtAddr;
 
-
 pub struct Locked<T> {
     inner: Mutex<T>,
 }
 
-impl<A> Locked<A> {
-    pub fn new(t: A) -> Self {
+impl<T> Locked<T> {
+    pub fn new(t: T) -> Self {
         Locked {
             inner: Mutex::new(t),
         }
     }
 
-    pub fn lock(&self) -> MutexGuard<A> {
+    pub fn lock(&self) -> MutexGuard<T> {
         self.inner.lock()
     }
 }

@@ -177,6 +177,10 @@ impl PhysFrameAllocator {
             self.deallocate_frame(UnusedPhysFrame::new(frame));
         }
     }
+
+    pub fn allocate(&mut self) -> Option<UnusedPhysFrame<Size2MiB>> {
+        unsafe { self.allocate_frame() }
+    }
 }
 
 unsafe impl FrameAllocator<Size2MiB> for PhysFrameAllocator {
