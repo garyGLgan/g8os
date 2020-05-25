@@ -179,7 +179,7 @@ impl PhysFrameAllocator {
     }
 
     pub fn allocate(&mut self) -> Option<UnusedPhysFrame<Size2MiB>> {
-        unsafe { self.allocate_frame() }
+        self.allocate_frame()
     }
 }
 
