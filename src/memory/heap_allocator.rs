@@ -10,6 +10,7 @@ use x86_64::{
 
 const HEAP_MAX_BLOCKS: u64 = 0x4000000; // max heap size 128G
 const HEAP_BLOCK_SIZE: u64 = 64;        // matches cache line
+const HEAP_BLOCK_SIZE_BW: u64 = 6;      // bit width of heap block size
 const HEAP_MASK_START_ADDR: u64 = 0x20000000;
 const HEAP_START_ADDR: u64 = 0x40000000;
 
@@ -28,26 +29,10 @@ impl <'a> FreeBlock<'a> {
         self.start_addr() + self.size
     }
 
-    unsafe fn append_free_block(&mut self, addr: VirtAddr, size: u64) {
-        let mut block = FreeBlock{ 
-            size,
-            prev: Some(&mut *(self.start_addr() as *mut FreeBlock)),
-            next: self.next.take(),
-        };
-        
-        let mut _ptr = addr.as_u64() as *mut FreeBlock;
-        _ptr.write(block);
-        self.next = Some(&mut *_ptr);
-        if let Some(ref  mut next ) = (*_ptr).next {
-            next.prev = Some(&mut *_ptr);
-        }
-        self.write_size_at_end();
-    }
-
     unsafe fn expand_backward(&mut self, addr: VirtAddr, size: u64) -> &mut Self {
         assert!(addr.as_u64() == self.end_addr());
         self.size += size;
-        self.write_size_at_end();
+        self.write_addr_at_end();
         self
     }
 
@@ -61,35 +46,41 @@ impl <'a> FreeBlock<'a> {
         };
         let _ptr = addr.as_u64() as *mut FreeBlock;
         _ptr.write(block);
-        self.write_size_at_end();
+        (&mut *_ptr).write_addr_at_end();
         if let Some(ref mut prev)=self.prev {
             prev.next = Some(&mut *_ptr);
         }
         if let Some(ref mut next)=self.next {
             next.prev = Some(&mut *_ptr);
         }
-        self
+        (&mut *_ptr)
     }
 
-    unsafe fn merge_backward(&mut self, block: &mut FreeBlock) -> &mut Self {
-        assert!(self.end_addr() == block.start_addr());
-
-        self.size += block.size;
-        match block.next {
-            None => self.next = None,
-            Some(ref mut b) => {
-                let _addr = b.start_addr();
-                self.next = Some(&mut *(_addr as *mut FreeBlock));
-                b.prev = Some(&mut *(self.start_addr() as *mut FreeBlock));
+    unsafe fn merge_next(&mut self) -> &mut Self {
+        let s_addr = self.start_addr();
+        let e_addr = self.end_addr();
+        if let Some(ref mut next) = self.next {
+            if e_addr == next.start_addr(){
+                let block = &mut *(e_addr as *mut FreeBlock);
+                self.size += block.size;
+                match block.next {
+                    None => self.next = None,
+                    Some(ref mut b) => {
+                        let _addr = b.start_addr();
+                        self.next = Some(&mut *(_addr as *mut FreeBlock));
+                        b.prev = Some(&mut *(self.start_addr() as *mut FreeBlock));
+                    }
+                }
+                self.expand_backward(VirtAddr::new(block.start_addr()), block.size);
+                self.write_addr_at_end();
             }
         }
-        self.write_size_at_end();
         self
     }
 
-    unsafe fn write_size_at_end(&self) {
+    unsafe fn write_addr_at_end(&self) {
         let _e_ptr = (self.end_addr() -8) as *mut u64;
-        _e_ptr.write(self.size);
+        _e_ptr.write(self as *const Self as u64);
     }
 }
 
@@ -151,43 +142,41 @@ impl<'a> HeapAllocator<'a> {
     }
 
     unsafe fn ins_merg_free_block(&mut self, addr: VirtAddr, size: u64) {
-        let mut _addr = addr;
-        let mut _size = size;
-        let mut s_off = (addr.as_u64() - HEAP_START_ADDR)>>5;
-        let mut e_off = s_off + (size >> 5);
-        if self.mask.is_empty() || ( self.mask.is_set(s_off-1) && self.mask.is_set(e_off)){
-            self.add_free_block(addr, size);
-        } else if !self.mask.is_set(s_off-1){
-            let _ptr = (addr.as_u64() - 8) as *mut u64;
-            let _size = _ptr.read();
-            let _block = &mut *((addr.as_u64() - _size) as *mut FreeBlock);
+        let s_off = (addr.as_u64() - HEAP_START_ADDR)>>HEAP_BLOCK_SIZE_BW;
+        let e_off = (addr.as_u64() + size - HEAP_START_ADDR)>>HEAP_BLOCK_SIZE_BW;
+        let node = if s_off > 0 && !self.mask.is_set(s_off-1){ 
+            let _addr = ((addr.as_u64() - 8) as *const u64).read();
+            let _block =&mut *(_addr as *mut FreeBlock);
             _block.expand_backward(addr, size);
-            if !self.mask.is_set(e_off) {
-                if let Some(ref _next) = _block.next {
-                    let _addr = _next.start_addr();
-                    _block.merge_backward(&mut *(_addr as *mut FreeBlock));
-                }
+            if e_off < self.mask.size && !self.mask.is_set(e_off) {
+                _block.merge_next();
             }
-        } else if !self.mask.is_set(e_off) {
+            _block
+        } else if e_off < self.mask.size && !self.mask.is_set(e_off) {
             let _block = &mut *((addr.as_u64() + size) as *mut FreeBlock);
-            _block.expand_forward(addr, size);
-        }
-        self.mask.set_off(s_off);
-        self.mask.set_off(e_off-1);
+            _block.expand_forward(addr, size)
+        } else {
+            self.add_free_block(addr, size);
+            self.head.next.as_mut().unwrap()
+        };
+        self.mask.set_off((node.start_addr()  - HEAP_START_ADDR)>>HEAP_BLOCK_SIZE_BW);
+        self.mask.set_off((node.end_addr()  - HEAP_START_ADDR-1)>>HEAP_BLOCK_SIZE_BW);
     }
 
     unsafe fn add_free_block(&mut self, addr: VirtAddr, size: u64) {
-        let mut cur = &mut self.head;
-    
-        while let Some(ref mut  block) = cur.next {
-            if block.start_addr() > addr.as_u64() {
-                break;
+            let mut block = FreeBlock{ 
+                size,
+                prev: None,
+                next: self.head.next.take(),
+            };
+            
+            let mut _ptr = addr.as_u64() as *mut FreeBlock;
+            _ptr.write(block);
+            self.head.next = Some(&mut *_ptr);
+            if let Some(ref  mut next ) = (*_ptr).next {
+                next.prev = Some(&mut *_ptr);
             }
-            cur = cur.next.as_mut().unwrap();
-        }
-        unsafe {
-            cur.append_free_block(addr, size);
-        }
+            (&mut *_ptr).write_addr_at_end();
     }
 
     fn expand_mask(&mut self, frame: UnusedPhysFrame<Size2MiB>, flags: PageTableFlags) {
