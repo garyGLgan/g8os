@@ -1,5 +1,5 @@
 use crate::kernel_const::{
-    FRAME_SIZE, FRAME_SIZE_BIT_WIDTH, PAGE_TABLE_END, PAGE_TABLE_P2, PAGE_TABLE_P3, PAGE_TABLE_P4,
+    PAGE_TABLE_END, PAGE_TABLE_P2, PAGE_TABLE_P3, PAGE_TABLE_P4,
     PAGE_TABLE_START,
 };
 use lazy_static::lazy_static;
@@ -22,7 +22,7 @@ lazy_static! {
         let page_allocator: PageTableAlloc = {
             let mut frames = [0; NUMBER_OF_FRAMES];
             let mut p = 0;
-            for (i, f) in (PAGE_TABLE_START..(PAGE_TABLE_END - (PAGE_FRAME_SIZE as u64)))
+            for (_, f) in (PAGE_TABLE_START..(PAGE_TABLE_END - (PAGE_FRAME_SIZE as u64)))
                 .step_by(PAGE_FRAME_SIZE)
                 .enumerate()
             {

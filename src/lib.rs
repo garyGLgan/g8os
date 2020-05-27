@@ -5,6 +5,8 @@
 #![feature(const_in_array_repeat_expressions)]
 #![feature(abi_x86_interrupt)]
 #![feature(const_raw_ptr_deref)]
+#![feature(alloc_error_handler)]
+#![feature(const_mut_refs)]
 
 extern crate alloc;
 
@@ -16,10 +18,9 @@ pub mod memory;
 pub mod util;
 pub mod vga_buffer;
 
-use kernel_const::{STACK_BOTTOM, STACK_TOP};
+use kernel_const::{STACK_BOTTOM};
 use memory::frame_controller::FRAME_ALLOC;
 use memory::paging::g8_page_table::PAGE_TABLE;
-use x86_64::structures::paging::{Size2MiB, UnusedPhysFrame};
 use x86_64::VirtAddr;
 
 #[no_mangle]
@@ -57,4 +58,10 @@ pub fn init() {
 fn panic(info: &PanicInfo) -> ! {
     println!("Panic: {}", info);
     hlt_loop();
+}
+
+
+#[alloc_error_handler]
+fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
+    panic!("allocation error: {:?}", layout)
 }

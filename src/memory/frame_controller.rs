@@ -4,7 +4,6 @@ use crate::kernel_const::{
 use crate::println;
 use crate::util::Locked;
 use lazy_static::lazy_static;
-use spin::Mutex;
 use x86_64::{
     structures::paging::{FrameAllocator, FrameDeallocator, PhysFrame, Size2MiB, UnusedPhysFrame},
     PhysAddr,
