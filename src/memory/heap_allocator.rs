@@ -27,23 +27,19 @@ impl<'a> BitMask<'a> {
         VirtAddr::new(HEAP_MASK_START_ADDR+(self.size >> 3))
     }
 
-    unsafe fn init_inner(&mut self) {
-        if self.inner.is_none(){
-            self.inner = Some(&mut *(HEAP_MASK_START_ADDR as *mut [u64; HEAP_MAX_BLOCKS as usize]));
-        }
+    unsafe fn inner(&mut self) -> &mut  [u64; HEAP_MAX_BLOCKS as usize]{
+        self.inner.as_mut().unwrap()
     }
 
     unsafe fn set_on(&mut self, pos: u64) {
-        self.init_inner();
         let (p, m) = self.split_pos(pos);
-        let inner = self.inner.as_mut().unwrap();
+        let inner = self.inner();
         inner[p] = inner[p] | m;
     }
 
     unsafe fn set_off(&mut self, pos: u64) {
-        self.init_inner();
         let (p, m) = self.split_pos(pos);
-        let inner = self.inner.as_mut().unwrap();
+        let inner = self.inner();
         inner[p] = inner[p] & !m;
     }
 
@@ -53,9 +49,9 @@ impl<'a> BitMask<'a> {
     }
 
     unsafe fn is_set(&mut self, pos: u64) -> bool {
-        self.init_inner();
         let (p, m) = self.split_pos(pos);
-        (self.inner.as_mut().unwrap()[p] & m) != 0
+        let inner = self.inner();
+        inner[p] & m != 0
     }
 
     fn is_empty(&self) -> bool {
@@ -268,12 +264,10 @@ impl HeapAllocator<'static> {
             }
         };
 
-        while curr.next.is_some() {
-            if curr.size >= size {
-                break;
-            }
+        while curr.next.is_some() && curr.size < size {
             curr = curr.next.as_ref().unwrap();
         }
+        
         let _addr = curr.start_addr();
         let _block =  &mut *(_addr as *mut FreeBlock);
         let mut _size =_block.size;
@@ -309,5 +303,12 @@ unsafe impl GlobalAlloc for Locked<HeapAllocator<'static>> {
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let (size, _) = HeapAllocator::size_align(layout);
         self.lock().ins_merg_free_block(ptr as u64, size);
+    }
+}
+
+pub fn init() {
+    unsafe {
+        ALLOCATOR.lock().mask.inner = Some(&mut *(HEAP_MASK_START_ADDR as *mut [u64; HEAP_MAX_BLOCKS as usize]));
+        ALLOCATOR.lock().expand();
     }
 }

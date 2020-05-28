@@ -21,6 +21,7 @@ pub mod vga_buffer;
 use kernel_const::{STACK_BOTTOM};
 use memory::frame_controller::FRAME_ALLOC;
 use memory::paging::g8_page_table::PAGE_TABLE;
+use memory::heap_allocator;
 use x86_64::VirtAddr;
 
 #[no_mangle]
@@ -51,6 +52,9 @@ pub fn init() {
     } else {
         panic!("unmap failed")
     }
+
+    heap_allocator::init();
+
 }
 
 #[panic_handler]
