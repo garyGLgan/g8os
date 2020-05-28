@@ -18,12 +18,13 @@ pub mod memory;
 pub mod util;
 pub mod vga_buffer;
 
-use kernel_const::{STACK_BOTTOM};
-use memory::frame_controller::FRAME_ALLOC;
-use memory::paging::g8_page_table::PAGE_TABLE;
-use memory::heap_allocator;
-use x86_64::VirtAddr;
 use alloc::boxed::Box;
+use alloc::vec::Vec;
+use kernel_const::STACK_BOTTOM;
+use memory::frame_controller::FRAME_ALLOC;
+use memory::heap_allocator;
+use memory::paging::g8_page_table::PAGE_TABLE;
+use x86_64::VirtAddr;
 
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
@@ -53,20 +54,19 @@ pub fn init() {
     } else {
         panic!("unmap failed")
     }
-    println!("Heap allocator initializing...");
     heap_allocator::init();
-    println!("Heap allocator initialized!");
 }
-
 
 fn many_boxes_long_lived() {
     print!("many_boxes_long_lived... ");
+    let mut v_box = Vec::<Box<i32>>::new();
     let long_lived = Box::new(1); // new
-    for i in 0..10000 {
+    for i in 0..1000000 {
         let x = Box::new(i);
-        if *x!=i {
+        if *x != i {
             panic!("new Box error");
         }
+        v_box.push(x);
     }
     println!("[ok]");
 }
@@ -77,7 +77,6 @@ fn panic(info: &PanicInfo) -> ! {
     println!("Panic: {}", info);
     hlt_loop();
 }
-
 
 #[alloc_error_handler]
 fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {

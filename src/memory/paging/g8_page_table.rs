@@ -1,6 +1,5 @@
 use crate::kernel_const::{
-    PAGE_TABLE_END, PAGE_TABLE_P2, PAGE_TABLE_P3, PAGE_TABLE_P4,
-    PAGE_TABLE_START,
+    PAGE_TABLE_END, PAGE_TABLE_P2, PAGE_TABLE_P3, PAGE_TABLE_P4, PAGE_TABLE_START,
 };
 use lazy_static::lazy_static;
 use spin::Mutex;
