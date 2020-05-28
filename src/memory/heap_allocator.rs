@@ -7,6 +7,7 @@ use x86_64::{
     VirtAddr,
 };
 use crate::util::Locked;
+use crate::println;
 
 const HEAP_MAX_BLOCKS: u64 = 0x4000000; // max heap size 128G
 const HEAP_BLOCK_SIZE: u64 = 64;        // matches cache line
@@ -23,8 +24,8 @@ struct BitMask<'a> {
 }
 
 impl<'a> BitMask<'a> {
-    fn boudry_addr(&self) -> VirtAddr {
-        VirtAddr::new(HEAP_MASK_START_ADDR+(self.size >> 3))
+    fn boudry_addr(&self) -> u64 {
+        HEAP_MASK_START_ADDR + (self.size >> 3)
     }
 
     unsafe fn inner(&mut self) -> &mut  [u64; HEAP_MAX_BLOCKS as usize]{
@@ -182,6 +183,7 @@ impl HeapAllocator<'static> {
                 let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
                 Ok((frame, flags))
             };
+        
 
         let mut _size = 0;
         let s_addr = self.boundry_addr();
@@ -193,9 +195,9 @@ impl HeapAllocator<'static> {
             _size += FRAME_SIZE;
         }
         self.size += _size;
-
         let (frame, flags) = alloc_frame()?;
         self.expand_mask(frame, flags);
+
         self.ins_merg_free_block(s_addr.as_u64(), _size);
         Ok(())
     }
@@ -239,12 +241,12 @@ impl HeapAllocator<'static> {
     }
 
     fn expand_mask(&mut self, frame: UnusedPhysFrame<Size2MiB>, flags: PageTableFlags) {
-        let s_ptr = self.mask.boudry_addr().as_u64() as *mut u64;
+        let s_ptr = self.mask.boudry_addr() as *mut u64;
         PAGE_TABLE
             .lock()
-            .map_to(self.mask.boudry_addr(), frame, flags);
+            .map_to(VirtAddr::new(self.mask.boudry_addr()), frame, flags);
         self.mask.size += 8 * FRAME_SIZE;
-        let e_ptr = self.mask.boudry_addr().as_u64() as *mut u64;
+        let e_ptr = (self.mask.boudry_addr()- 8) as *mut u64;
         unsafe {
             s_ptr.write(0);
             e_ptr.write(0);
@@ -267,7 +269,7 @@ impl HeapAllocator<'static> {
         while curr.next.is_some() && curr.size < size {
             curr = curr.next.as_ref().unwrap();
         }
-        
+
         let _addr = curr.start_addr();
         let _block =  &mut *(_addr as *mut FreeBlock);
         let mut _size =_block.size;
@@ -294,6 +296,7 @@ impl HeapAllocator<'static> {
 
 unsafe impl GlobalAlloc for Locked<HeapAllocator<'static>> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        println!("allocate {} bytes", layout.size());
         let (size, _) = HeapAllocator::size_align(layout);
         let mut allocator = self.lock();
 
@@ -301,6 +304,7 @@ unsafe impl GlobalAlloc for Locked<HeapAllocator<'static>> {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        println!("deallocate {} bytes", layout.size());
         let (size, _) = HeapAllocator::size_align(layout);
         self.lock().ins_merg_free_block(ptr as u64, size);
     }

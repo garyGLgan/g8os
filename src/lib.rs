@@ -23,12 +23,14 @@ use memory::frame_controller::FRAME_ALLOC;
 use memory::paging::g8_page_table::PAGE_TABLE;
 use memory::heap_allocator;
 use x86_64::VirtAddr;
+use alloc::boxed::Box;
 
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
     println!("Welcom to G8 OS!");
     println!("Auth: Gary Gan");
     init();
+    many_boxes_long_lived();
     hlt_loop()
 }
 
@@ -43,7 +45,6 @@ pub fn init() {
     idt::init_idt();
     unsafe { idt::PICS.lock().initialize() };
     x86_64::instructions::interrupts::enable();
-    println!("Frame allocator initialized!");
     FRAME_ALLOC.lock().print_out();
 
     if let Ok((frame, flusher)) = PAGE_TABLE.lock().unmap(VirtAddr::new(STACK_BOTTOM)) {
@@ -52,9 +53,22 @@ pub fn init() {
     } else {
         panic!("unmap failed")
     }
-
+    println!("Heap allocator initializing...");
     heap_allocator::init();
+    println!("Heap allocator initialized!");
+}
 
+
+fn many_boxes_long_lived() {
+    print!("many_boxes_long_lived... ");
+    let long_lived = Box::new(1); // new
+    for i in 0..10000 {
+        let x = Box::new(i);
+        if *x!=i {
+            panic!("new Box error");
+        }
+    }
+    println!("[ok]");
 }
 
 #[panic_handler]
