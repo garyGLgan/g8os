@@ -64,6 +64,7 @@ fn many_boxes_long_lived() {
     for i in 0..1000000 {
         let x = Box::new(i);
         if *x != i {
+            println!("==== not equals {}", i);
             panic!("new Box error");
         }
         v_box.push(x);

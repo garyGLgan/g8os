@@ -45,6 +45,9 @@ impl BitMask {
     }
 
     fn split_pos(&self, pos: u64) -> (usize, u64) {
+        if pos >= self.size {
+            println!(" Pos({}) >= size({}) ", pos, self.size);
+        }
         assert!(pos < self.size);
         ((pos >> 6) as usize, 1 << (63 - (pos & 0x3f)))
     }
@@ -300,7 +303,7 @@ impl HeapAllocator {
 
 unsafe impl GlobalAlloc for Locked<HeapAllocator> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        println!("allocate {} bytes", layout.size());
+        // println!("allocate {} bytes", layout.size());
         let (size, _) = HeapAllocator::size_align(layout);
         let mut allocator = self.lock();
 
@@ -308,7 +311,7 @@ unsafe impl GlobalAlloc for Locked<HeapAllocator> {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        println!("deallocate {} bytes", layout.size());
+        // println!("deallocate {} bytes", layout.size());
         let (size, _) = HeapAllocator::size_align(layout);
         self.lock().ins_merg_free_block(ptr as u64, size);
     }
