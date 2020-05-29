@@ -31,7 +31,7 @@ pub unsafe extern "C" fn g8start() {
     println!("Welcom to G8 OS!");
     println!("Auth: Gary Gan");
     init();
-    many_boxes_long_lived();
+    many_boxes_alloc_test();
     hlt_loop()
 }
 
@@ -57,11 +57,11 @@ pub fn init() {
     heap_allocator::init();
 }
 
-fn many_boxes_long_lived() {
-    print!("many_boxes_long_lived... ");
+fn many_boxes_alloc_test() {
+    print!("many_boxes_alloc_test... ");
 
     let mut v_box = Vec::<Box<i32>>::new();
-    for i in 0..10000 {
+    for i in 0..1000000 {
         let x = Box::new(i);
         if *x != i {
             panic!("error the value in box is not correct");

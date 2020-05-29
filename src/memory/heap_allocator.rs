@@ -1,7 +1,7 @@
 use crate::kernel_const::FRAME_SIZE;
 use crate::memory::frame_controller::FRAME_ALLOC;
 use crate::memory::paging::g8_page_table::PAGE_TABLE;
-use crate::println;
+use crate::{print,println};
 use crate::util::Locked;
 use alloc::alloc::{GlobalAlloc, Layout};
 use x86_64::{
@@ -45,9 +45,6 @@ impl BitMask {
     }
 
     fn split_pos(&self, pos: u64) -> (usize, u64) {
-        if pos >= self.size {
-            println!(" Pos({}) >= size({}) ", pos, self.size);
-        }
         assert!(pos < self.size);
         ((pos >> 6) as usize, 1 << (63 - (pos & 0x3f)))
     }
@@ -229,9 +226,10 @@ impl HeapAllocator {
     }
 
     unsafe fn add_free_block(&mut self, addr: u64, size: u64) {
+        let _addr = self.head.start_addr();
         let block = FreeBlock {
             size,
-            prev: None,
+            prev: Some(&mut *(_addr as *mut FreeBlock)),
             next: self.head.next.take(),
         };
 
