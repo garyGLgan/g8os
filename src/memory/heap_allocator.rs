@@ -108,10 +108,10 @@ impl FreeBlock {
     unsafe fn merge_next(&mut self) -> &mut Self {
         let _s_addr = self.start_addr();
         let _e_addr = self.end_addr();
+        
         if let Some(ref mut next) = self.next {
             if _e_addr == next.start_addr() {
                 let block = &mut *(_e_addr as *mut FreeBlock);
-                self.size += block.size;
                 match block.next {
                     None => self.next = None,
                     Some(ref mut b) => {
@@ -303,15 +303,11 @@ impl HeapAllocator {
 
 unsafe impl GlobalAlloc for Locked<HeapAllocator> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        // println!("allocate {} bytes", layout.size());
         let (size, _) = HeapAllocator::size_align(layout);
-        let mut allocator = self.lock();
-
-        allocator.find_and_alloc(size)
+        self.lock().find_and_alloc(size)
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        // println!("deallocate {} bytes", layout.size());
         let (size, _) = HeapAllocator::size_align(layout);
         self.lock().ins_merg_free_block(ptr as u64, size);
     }

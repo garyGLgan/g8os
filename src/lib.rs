@@ -59,13 +59,12 @@ pub fn init() {
 
 fn many_boxes_long_lived() {
     print!("many_boxes_long_lived... ");
+
     let mut v_box = Vec::<Box<i32>>::new();
-    let long_lived = Box::new(1); // new
-    for i in 0..1000000 {
+    for i in 0..10000 {
         let x = Box::new(i);
         if *x != i {
-            println!("==== not equals {}", i);
-            panic!("new Box error");
+            panic!("error the value in box is not correct");
         }
         v_box.push(x);
     }
