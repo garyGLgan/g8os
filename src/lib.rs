@@ -7,6 +7,7 @@
 #![feature(const_raw_ptr_deref)]
 #![feature(alloc_error_handler)]
 #![feature(const_mut_refs)]
+#![feature(wake_trait)]
 
 extern crate alloc;
 
@@ -17,6 +18,7 @@ pub mod kernel_const;
 pub mod memory;
 pub mod util;
 pub mod vga_buffer;
+pub mod task;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;

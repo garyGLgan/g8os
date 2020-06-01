@@ -1,7 +1,6 @@
 use crate::kernel_const::FRAME_SIZE;
 use crate::memory::frame_controller::FRAME_ALLOC;
 use crate::memory::paging::g8_page_table::PAGE_TABLE;
-use crate::{print,println};
 use crate::util::Locked;
 use alloc::alloc::{GlobalAlloc, Layout};
 use x86_64::{
