@@ -26,7 +26,8 @@ lazy_static! {
                 .set_stack_index(0 as u16);
         }
         idt.page_fault.set_handler_fn(page_fault_handler);
-        idt.general_protection_fault.set_handler_fn(general_protected_handler);
+        idt.general_protection_fault
+            .set_handler_fn(general_protected_handler);
         idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
         idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
         idt
@@ -61,11 +62,12 @@ extern "x86-interrupt" fn breakpoint_handler(stack_frame: &mut InterruptStackFra
 extern "x86-interrupt" fn double_fault_handler(
     stack_frame: &mut InterruptStackFrame,
     _error_code: u64,
-) ->  ! {
+) -> ! {
     panic!("EXCEPTION: DOUBLE FAULT \n{:#?}", stack_frame);
 }
+
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: &mut InterruptStackFrame) {
-    print!(".");
+    // print!(".");
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
@@ -78,9 +80,11 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: &mut Interrup
 
     lazy_static! {
         static ref KEYBOARD: spin::Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> =
-            spin::Mutex::new(Keyboard::new(layouts::Us104Key, ScancodeSet1,
-                HandleControl::Ignore)
-            );
+            spin::Mutex::new(Keyboard::new(
+                layouts::Us104Key,
+                ScancodeSet1,
+                HandleControl::Ignore
+            ));
     }
 
     let mut keyboard = KEYBOARD.lock();
@@ -115,8 +119,8 @@ extern "x86-interrupt" fn page_fault_handler(
 }
 
 extern "x86-interrupt" fn general_protected_handler(
-        stack_frame: &mut InterruptStackFrame,
-        error_code: u64,
+    stack_frame: &mut InterruptStackFrame,
+    error_code: u64,
 ) {
     println!("EXCEPTION: GENERAL PROTECT");
     println!("Error Code: {:?}", error_code);

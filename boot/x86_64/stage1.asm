@@ -119,14 +119,14 @@ done:
 ; using 2MiB pages
 set_up_page_tables:
     ; map first P4 entry to P3 table
-    mov eax, BOOT_PAGE_TABLE_P3
+    mov eax, PAGE_TABLE_P3
     or eax, 0b11 ; present & writable
-    mov [BOOT_PAGE_TABLE_P4], eax
+    mov [PAGE_TABLE_P4], eax
 
     ; map first P3 entry to P2 table
-    mov eax, BOOT_PAGE_TABLE_P2
+    mov eax, PAGE_TABLE_P2
     or eax, 0b11 ; present & writable
-    mov [BOOT_PAGE_TABLE_P3], eax
+    mov [PAGE_TABLE_P3], eax
 
     ; map each P2 entry to a huge 2MiB page
     mov ecx, 0         ; counter
@@ -136,10 +136,10 @@ set_up_page_tables:
     mov eax, 0x200000                       ; 2MiB
     mul ecx                                 ; page[ecx] start address
     or eax, 0b10000011                      ; present & writable & huge
-    mov [BOOT_PAGE_TABLE_P2 + ecx * 8], eax ; map entry
+    mov [PAGE_TABLE_P2 + ecx * 8], eax ; map entry
 
     inc ecx
-    cmp ecx, 0x200                  ; is the whole P2 table is mapped?
+    cmp ecx, 0x100                  ; is the whole P2 table is mapped?
     jne .map_page_table_p2_loop     ; next entry
 
     ; done
@@ -149,7 +149,7 @@ set_up_page_tables:
 ; http://wiki.osdev.org/Paging#Enabling
 enable_paging:
     ; load P4 to cr3 register (cpu uses this to access the P4 table)
-    mov eax, BOOT_PAGE_TABLE_P4
+    mov eax, PAGE_TABLE_P4
     mov cr3, eax
 
     ; enable PAE-flag in cr4 (Physical Address Extension)

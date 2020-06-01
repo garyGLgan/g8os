@@ -20,33 +20,37 @@ stage2:
 
     mov dword [0xb8000], 0x2f332f30
 
-    mov al, 'E'
+
 
     ; magic number 0x7f+'ELF'
-    cmp dword [KERNEL_LOADPOINT], 0x464c457f
+    cmp dword [KERNEL_HEADER_LOADPOINT], 0x464c457f
     jne error
 
     ; bitness and instruction set (must be 64, so values must be 2 and 0x3e) (error code: "EB")
-    cmp byte [KERNEL_LOADPOINT + 4], 0x2
+    cmp byte [KERNEL_HEADER_LOADPOINT + 4], 0x2
     jne error
-    cmp word [KERNEL_LOADPOINT + 18], 0x3e
+    cmp word [KERNEL_HEADER_LOADPOINT + 18], 0x3e
     jne error
 
     ; endianess (must be little endian, so value must be 1) (error code: "EE")
-    cmp byte [KERNEL_LOADPOINT + 5], 0x1
+    cmp byte [KERNEL_HEADER_LOADPOINT + 5], 0x1
     jne error
 
+    
     ; elf version (must be 1) (error code: "EV")
-    cmp byte [KERNEL_LOADPOINT + 0x0006], 0x1
+    cmp byte [KERNEL_HEADER_LOADPOINT + 0x0006], 0x1
     jne error
-
+    mov al, 'F'
+    
     ; Now lets trust it's actually real and valid elf file
 
     ; kernel entry position must be correct
     ; (error code : "Ep")
-    cmp qword [KERNEL_LOADPOINT + 24], KERNEL_LOCATION
+    cmp qword [KERNEL_HEADER_LOADPOINT + 24], KERNEL_LOCATION
     jne error
-
+    
+    mov al, 'E'
+    
     ; get how many sectors of kernel in the disk need to be loaded to memory
     ; size = elf_shoff + elf_shentsize * elf_shentnum, sectors = ( (size + 511) >> 9 )-1
     ; the first sector have been loaded at
@@ -55,10 +59,10 @@ stage2:
     mov rbx, rax
     mov rcx, rax
     mov rdx, rax 
-    mov ax, word [KERNEL_LOADPOINT + 58]
-    mov cx, word [KERNEL_LOADPOINT + 60] 
+    mov ax, word [KERNEL_HEADER_LOADPOINT + 58]
+    mov cx, word [KERNEL_HEADER_LOADPOINT + 60] 
     imul ecx, eax
-    add rcx, qword [KERNEL_LOADPOINT + 40], 
+    add rcx, qword [KERNEL_HEADER_LOADPOINT + 40], 
     
     add rcx, 0x1ff
     shr rcx, 9
