@@ -1,9 +1,9 @@
 use super::{Task, TaskId};
-use alloc::{Collections::BTreeMap, sync::Arc};
+use alloc::{collections::BTreeMap, sync::Arc, task::Wake};
 use core::task::{Context, Poll, Waker};
 use crossbeam_queue::ArrayQueue;
 
-struct TskWaker{
+struct TaskWaker{
     task_id: TaskId,
     task_queue: Arc<ArrayQueue<TaskId>>,
 }
@@ -20,7 +20,7 @@ impl TaskWaker {
     }
 }
 
-impl Waker for TskWaker {
+impl Wake for TaskWaker {
     fn wake(self: Arc<Self>) {
         self.wake_task();
     }
@@ -46,43 +46,43 @@ impl Executor {
     }
 
     pub fn spawn(&mut self, task: Task) {
-        let task_id = task.id;
+        let _id = task.id;
         if self.tasks.insert(task.id, task).is_some() {
-            panic!("task with same ID({}) already in tasks", task.id);
+            panic!("task with same ID({}) already in tasks", _id.0);
         }
-        self.task_queue.push(task_id).expect("queue full");
+        self.task_queue.push(_id).expect("queue full");
     }
 
-    fn run_reqdy-tasks(&mut self) {
+    fn run_ready_tasks(&mut self) {
         let Self {
             tasks, 
             task_queue,
             waker_queue,
         } = self;
 
-        while let Ok(_id) = self.task_queue.pop() {
-            let task = match tasks.get(_id) {
+        while let Ok(_id) = task_queue.pop() {
+            let task = match tasks.get_mut(&_id) {
                 None => continue,
                 Some(task) => task,
             };
 
             let waker = waker_queue
                         .entry(_id)
-                        .or_inert_with(|| TaskWaker::new(_id,task_queue.clone()));
+                        .or_insert_with(|| TaskWaker::new(_id,task_queue.clone()));
             let mut context = Context::from_waker(waker);
             match task.poll(&mut context) {
                 Poll::Ready(()) => {
-                    tasks.remove(_id);
+                    tasks.remove(&_id);
                     waker_queue.remove(&_id);
                 }
-                Pool::Pending => {}
+                Poll::Pending => {}
             }
         }
     }
 
-    pub fn run(&mu self) -> ! {
+    pub fn run(&mut self) -> ! {
         loop {
-            self.run_read_tasks();
+            self.run_ready_tasks();
             self.sleep_when_idle();
         }
     }
@@ -94,7 +94,7 @@ impl Executor {
         if self.task_queue.is_empty() {
             enable_interrupts_and_hlt();
         }else {
-            interrupt::enable();
+            interrupts::enable();
         }
     }
 }
