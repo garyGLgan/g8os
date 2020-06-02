@@ -9,7 +9,14 @@ use volatile::Volatile;
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
-        color_code: ColorCode::new(Color::Yellow, Color::Black),
+        color_codes: ColorCodes{
+            debug_color: ColorCode::new(Color::Yellow, Color::Black),
+            info_color: ColorCode::new(Color::LightGray, Color::Black),
+            warn_color: ColorCode::new(Color::Pink, Color::Black),
+            error_color: ColorCode::new(Color::Red, Color::Black),
+            input_color: ColorCode::new(Color::White, Color::Black),
+            blank_color: ColorCode::new(Color::Black, Color::Black),
+        },
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
     });
 }
@@ -47,6 +54,17 @@ impl ColorCode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
+struct ColorCodes{
+    debug_color: ColorCode,
+    info_color: ColorCode,
+    warn_color: ColorCode,
+    error_color: ColorCode,
+    input_color: ColorCode,
+    blank_color: ColorCode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
 struct ScreenChar {
     ascii_character: u8,
     color_code: ColorCode,
@@ -62,12 +80,12 @@ struct Buffer {
 
 pub struct Writer {
     column_position: usize,
-    color_code: ColorCode,
+    color_codes: ColorCodes,
     buffer: &'static mut Buffer,
 }
 
 impl Writer {
-    pub fn write_byte(&mut self, byte: u8) {
+    fn write_byte(&mut self, byte: u8, color: ColorCode) {
         match byte {
             b'\n' => self.new_line(),
             byte => {
@@ -75,24 +93,39 @@ impl Writer {
                     self.new_line();
                 }
 
-                let row = BUFFER_HEIGHT - 1;
+                let row = BUFFER_HEIGHT - 2;
                 let col = self.column_position;
 
-                let color_code = self.color_code;
                 self.buffer.chars[row][col].write(ScreenChar {
                     ascii_character: byte,
-                    color_code,
+                    color_code: color,
                 });
                 self.column_position += 1;
             }
         }
     }
 
-    pub fn write_string(&mut self, s: &str) {
+    pub fn debug(&mut self, s: &str) {
+        self.write_string(s,self.color_codes.debug_color);
+    }
+
+    pub fn info(&mut self, s: &str) {
+        self.write_string(s,self.color_codes.info_color);
+    }
+
+    pub fn warn(&mut self, s: &str) {
+        self.write_string(s,self.color_codes.warn_color);
+    }
+
+    pub fn error(&mut self, s: &str) {
+        self.write_string(s,self.color_codes.error_color);
+    }
+
+    fn write_string(&mut self, s: &str, color: ColorCode) {
         for byte in s.bytes() {
             match byte {
-                0x20..=0x7e | b'\n' => self.write_byte(byte),
-                _ => self.write_byte(0xfe),
+                0x20..=0x7e | b'\n' => self.write_byte(byte, color),
+                _ => self.write_byte(0xfe, color),
             }
         }
     }
@@ -111,7 +144,7 @@ impl Writer {
     fn clear_row(&mut self, row: usize) {
         let blank = ScreenChar {
             ascii_character: b' ',
-            color_code: self.color_code,
+            color_code: self.color_codes.blank_color,
         };
 
         for col in 0..BUFFER_WIDTH {
@@ -122,14 +155,14 @@ impl Writer {
 
 impl fmt::Write for Writer {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        self.write_string(s);
+        self.info(s);
         Ok(())
     }
 }
 
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::console::vga_buffer::_print(format_args!($($arg)*)));
 }
 
 #[macro_export]

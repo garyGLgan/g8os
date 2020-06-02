@@ -8,6 +8,7 @@
 #![feature(alloc_error_handler)]
 #![feature(const_mut_refs)]
 #![feature(wake_trait)]
+#![feature(generic_associated_types)]
 
 extern crate alloc;
 
@@ -17,8 +18,8 @@ pub mod idt;
 pub mod kernel_const;
 pub mod memory;
 pub mod util;
-pub mod vga_buffer;
 pub mod task;
+pub mod console;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -26,6 +27,9 @@ use kernel_const::STACK_BOTTOM;
 use memory::frame_controller::FRAME_ALLOC;
 use memory::heap_allocator;
 use memory::paging::g8_page_table::PAGE_TABLE;
+
+
+
 use x86_64::VirtAddr;
 
 #[no_mangle]
