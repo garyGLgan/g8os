@@ -9,7 +9,7 @@ use volatile::Volatile;
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
-        color_codes: ColorCodes{
+        color_codes: ColorCodes {
             debug_color: ColorCode::new(Color::Yellow, Color::Black),
             info_color: ColorCode::new(Color::LightGray, Color::Black),
             warn_color: ColorCode::new(Color::Pink, Color::Black),
@@ -54,7 +54,7 @@ impl ColorCode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
-struct ColorCodes{
+struct ColorCodes {
     debug_color: ColorCode,
     info_color: ColorCode,
     warn_color: ColorCode,
@@ -106,19 +106,19 @@ impl Writer {
     }
 
     pub fn debug(&mut self, s: &str) {
-        self.write_string(s,self.color_codes.debug_color);
+        self.write_string(s, self.color_codes.debug_color);
     }
 
     pub fn info(&mut self, s: &str) {
-        self.write_string(s,self.color_codes.info_color);
+        self.write_string(s, self.color_codes.info_color);
     }
 
     pub fn warn(&mut self, s: &str) {
-        self.write_string(s,self.color_codes.warn_color);
+        self.write_string(s, self.color_codes.warn_color);
     }
 
     pub fn error(&mut self, s: &str) {
-        self.write_string(s,self.color_codes.error_color);
+        self.write_string(s, self.color_codes.error_color);
     }
 
     fn write_string(&mut self, s: &str, color: ColorCode) {

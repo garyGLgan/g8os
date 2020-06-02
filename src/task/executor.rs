@@ -3,14 +3,14 @@ use alloc::{collections::BTreeMap, sync::Arc, task::Wake};
 use core::task::{Context, Poll, Waker};
 use crossbeam_queue::ArrayQueue;
 
-struct TaskWaker{
+struct TaskWaker {
     task_id: TaskId,
     task_queue: Arc<ArrayQueue<TaskId>>,
 }
 
 impl TaskWaker {
     fn new(task_id: TaskId, task_queue: Arc<ArrayQueue<TaskId>>) -> Waker {
-        Waker::from(Arc::new(TaskWaker{
+        Waker::from(Arc::new(TaskWaker {
             task_id,
             task_queue,
         }))
@@ -30,7 +30,7 @@ impl Wake for TaskWaker {
     }
 }
 
-pub struct Executor{
+pub struct Executor {
     tasks: BTreeMap<TaskId, Task>,
     task_queue: Arc<ArrayQueue<TaskId>>,
     waker_queue: BTreeMap<TaskId, Waker>,
@@ -38,7 +38,7 @@ pub struct Executor{
 
 impl Executor {
     pub fn new() -> Self {
-        Executor{
+        Executor {
             tasks: BTreeMap::new(),
             task_queue: Arc::new(ArrayQueue::new(100)),
             waker_queue: BTreeMap::new(),
@@ -55,7 +55,7 @@ impl Executor {
 
     fn run_ready_tasks(&mut self) {
         let Self {
-            tasks, 
+            tasks,
             task_queue,
             waker_queue,
         } = self;
@@ -67,8 +67,8 @@ impl Executor {
             };
 
             let waker = waker_queue
-                        .entry(_id)
-                        .or_insert_with(|| TaskWaker::new(_id,task_queue.clone()));
+                .entry(_id)
+                .or_insert_with(|| TaskWaker::new(_id, task_queue.clone()));
             let mut context = Context::from_waker(waker);
             match task.poll(&mut context) {
                 Poll::Ready(()) => {
@@ -93,7 +93,7 @@ impl Executor {
         interrupts::disable();
         if self.task_queue.is_empty() {
             enable_interrupts_and_hlt();
-        }else {
+        } else {
             interrupts::enable();
         }
     }

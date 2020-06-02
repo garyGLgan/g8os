@@ -1,47 +1,72 @@
 use super::vga_buffer;
-use conquer_once::spin::OnceCell;
-use crossbeam_queue::ArrayQueue;
-use futures_util::{task::AtomicWaker, stream::Stream, stream::StreamExt};
-use core::{pin::Pin, task::{Poll, Context}};
 use crate::println;
-use core::fmt::{Write, Arguments, Error};
 use alloc::{boxed::Box, string::String};
-
+use conquer_once::spin::OnceCell;
+use core::fmt::{Arguments, Error, Write};
+use core::{
+    pin::Pin,
+    task::{Context, Poll},
+};
+use crossbeam_queue::ArrayQueue;
+use futures_util::{stream::Stream, stream::StreamExt, task::AtomicWaker};
 
 static LOG_MSG_QUEUE: OnceCell<ArrayQueue<LogMsg>> = OnceCell::uninit();
 static LOG_WAKER: AtomicWaker = AtomicWaker::new();
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub enum LogLevel{
+pub enum LogLevel {
     ERROR = 0,
     WARN,
     INFO,
     DEBUG,
 }
 
-pub struct LogMsg<'a> {
+pub struct LogMsg {
     level: LogLevel,
-    msg: Box<&'a str>,
+    msg: String,
 }
 
-pub struct LogMsgStream{
+impl LogMsg {
+    fn new(log_level: LogLevel, msg: String) -> Self {
+        LogMsg {
+            level: log_level,
+            msg,
+        }
+    }
+
+    fn print(&self) {
+        use x86_64::instructions::interrupts;
+
+        interrupts::without_interrupts(|| match self.level {
+            LogLevel::ERROR => vga_buffer::WRITER.lock().error(self.msg.as_ref()),
+            LogLevel::WARN => vga_buffer::WRITER.lock().warn(self.msg.as_ref()),
+            LogLevel::DEBUG => vga_buffer::WRITER.lock().debug(self.msg.as_ref()),
+            LogLevel::INFO => vga_buffer::WRITER.lock().info(self.msg.as_ref()),
+        });
+    }
+}
+
+pub struct LogMsgStream {
     _private: (),
 }
 
 impl LogMsgStream {
     pub fn new() -> Self {
-        LOG_MSG_QUEUE.try_init_once(|| ArrayQueue::new(1000))
+        LOG_MSG_QUEUE
+            .try_init_once(|| ArrayQueue::new(1000))
             .expect("LogMsgStream::new should only the called once");
         LogMsgStream { _private: () }
     }
 }
 
-impl<'a>  Stream for LogMsgStream {
-    type Item<'a> = LogMsg<'a>;
+impl Stream for LogMsgStream {
+    type Item = LogMsg;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<LogMsg>> {
-        let queue = LOG_MSG_QUEUE.try_get().expect("Log message queue no initialized");
+        let queue = LOG_MSG_QUEUE
+            .try_get()
+            .expect("Log message queue no initialized");
         if let Ok(log_msg) = queue.pop() {
             return Poll::Ready(Some(log_msg));
         }
@@ -51,29 +76,14 @@ impl<'a>  Stream for LogMsgStream {
             Ok(log_msg) => {
                 LOG_WAKER.take();
                 Poll::Ready(Some(log_msg))
-            },
+            }
             Err(crossbeam_queue::PopError) => Poll::Pending,
         }
     }
 }
 
-impl<'a> LogMsg<'a> {
-    fn print(&self) {
-        use x86_64::instructions::interrupts;
-        
-        interrupts::without_interrupts(|| {
-            match self.level {
-                LogLevel::ERROR => vga_buffer::WRITER.lock().error(self.msg.as_ref()),
-                LogLevel::WARN => vga_buffer::WRITER.lock().warn(self.msg.as_ref()),
-                LogLevel::DEBUG => vga_buffer::WRITER.lock().debug(self.msg.as_ref()),
-                LogLevel::INFO => vga_buffer::WRITER.lock().info(self.msg.as_ref()),
-            }
-        });
-    }
-}
-
-fn log(level: LogLevel, args: Arguments) {
-    fn write<W: Write>( f: &mut W, args: Arguments) -> Result<(), Error> {
+pub fn _log(level: LogLevel, args: Arguments) {
+    fn write<W: Write>(f: &mut W, args: Arguments) -> Result<(), Error> {
         f.write_fmt(args)
     };
 
@@ -81,17 +91,13 @@ fn log(level: LogLevel, args: Arguments) {
     write(&mut buf, args).unwrap();
 
     if let Ok(queue) = LOG_MSG_QUEUE.try_get() {
-        let log_msg = LogMsg{
-            level: level,
-            msg: Box::new(&buf[..]),
-        };
-        if let Err(_) = LOG_MSG_QUEUE.push(log_msg) {
+        let log_msg = LogMsg::new(level, buf);
+        if let Err(_) = queue.push(log_msg) {
             println!("WRNING: log msg queue full; drop log message");
         }
-    }else {
+    } else {
         println!("WRING: log msg queue uninitialized");
     }
-
 }
 
 pub async fn print_log() {
@@ -100,4 +106,24 @@ pub async fn print_log() {
     while let Some(log_msg) = log_msgs.next().await {
         log_msg.print();
     }
+}
+
+#[macro_export]
+macro_rules! info {
+    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::INFO, format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! debug {
+    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::DEBUG, format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::WARN, format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! error {
+    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::ERROR, format_args!($($arg)*)));
 }

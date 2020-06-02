@@ -104,7 +104,7 @@ impl FreeBlock {
     unsafe fn merge_next(&mut self) -> &mut Self {
         let _s_addr = self.start_addr();
         let _e_addr = self.end_addr();
-        
+
         if let Some(ref mut next) = self.next {
             if _e_addr == next.start_addr() {
                 let block = &mut *(_e_addr as *mut FreeBlock);

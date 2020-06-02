@@ -13,22 +13,22 @@
 extern crate alloc;
 
 use core::panic::PanicInfo;
+pub mod console;
 pub mod gdt;
 pub mod idt;
 pub mod kernel_const;
 pub mod memory;
-pub mod util;
 pub mod task;
-pub mod console;
+pub mod util;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use console::sys_log;
 use kernel_const::STACK_BOTTOM;
 use memory::frame_controller::FRAME_ALLOC;
 use memory::heap_allocator;
 use memory::paging::g8_page_table::PAGE_TABLE;
-
-
+use task::{executor::Executor, Task};
 
 use x86_64::VirtAddr;
 
@@ -38,7 +38,10 @@ pub unsafe extern "C" fn g8start() {
     println!("Auth: Gary Gan");
     init();
     many_boxes_alloc_test();
-    hlt_loop()
+
+    let mut executor = Executor::new(); // new
+    executor.spawn(Task::new(sys_log::print_log()));
+    executor.run();
 }
 
 pub fn hlt_loop() -> ! {
