@@ -16,11 +16,10 @@ impl<T> Locked<T> {
     }
 }
 
-
 pub struct Flag(bool);
 
-impl Flag{
-    pub const fn new() -> Self{
+impl Flag {
+    pub const fn new() -> Self {
         Flag(false)
     }
 
@@ -29,10 +28,10 @@ impl Flag{
     }
 
     pub fn off(&mut self) {
-       self.0 = false;
+        self.0 = false;
     }
 
-    pub fn get(&self) -> bool{
+    pub fn get(&self) -> bool {
         self.0
     }
 }

@@ -9,8 +9,14 @@ use volatile::Volatile;
 
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
-        log_area: WriterArea::new(0..BUFFER_HEIGHT-2, ColorCode::new(Color::Black, Color::Black)),
-        input_area: WriterArea::new(0..BUFFER_HEIGHT-1, ColorCode::new(Color::Black, Color::Black)),
+        log_area: WriterArea::new(
+            0..(BUFFER_HEIGHT - 2),
+            ColorCode::new(Color::Black, Color::Black)
+        ),
+        input_area: WriterArea::new(
+            0..(BUFFER_HEIGHT - 1),
+            ColorCode::new(Color::Black, Color::Black)
+        ),
         color_codes: ColorCodes {
             debug_color: ColorCode::new(Color::Cyan, Color::Black),
             info_color: ColorCode::new(Color::LightGray, Color::Black),
@@ -88,14 +94,14 @@ pub struct WriterArea {
 
 impl WriterArea {
     fn new(r: Range<usize>, blank_color: ColorCode) -> Self {
-        WriterArea{
+        WriterArea {
             row_range: r,
             column_position: 0,
             blank_color,
         }
     }
 
-    fn write_byte(&mut self,  byte: u8, color: ColorCode, buffer: &mut Buffer){
+    fn write_byte(&mut self, byte: u8, color: ColorCode, buffer: &mut Buffer) {
         match byte {
             b'\n' => self.new_line(buffer),
             byte => {
@@ -116,7 +122,7 @@ impl WriterArea {
     }
 
     fn write_string(&mut self, s: &str, color: ColorCode, buffer: &mut Buffer) {
-        for byte in s.bytes(){
+        for byte in s.bytes() {
             match byte {
                 0x20..=0x7e | b'\n' => self.write_byte(byte, color, buffer),
                 _ => self.write_byte(0xfe, color, buffer),
@@ -125,13 +131,13 @@ impl WriterArea {
     }
 
     fn new_line(&mut self, buffer: &mut Buffer) {
-        for row in self.row_range.start..self.row_range.end {
+        for row in (self.row_range.start + 1)..=self.row_range.end {
             for col in 0..BUFFER_WIDTH {
                 let character = buffer.chars[row][col].read();
                 buffer.chars[row - 1][col].write(character);
             }
         }
-        self.clear_row( buffer);
+        self.clear_row(buffer);
         self.column_position = 0;
     }
 
@@ -155,7 +161,6 @@ pub struct Writer {
 }
 
 impl Writer {
-
     fn log_byte(&mut self, byte: u8, color: ColorCode) {
         self.log_area.write_byte(byte, color, self.buffer);
     }
@@ -165,23 +170,28 @@ impl Writer {
     }
 
     pub fn debug(&mut self, s: &str) {
-        self.log_area.write_string(s, self.color_codes.debug_color, self.buffer);
+        self.log_area
+            .write_string(s, self.color_codes.debug_color, self.buffer);
     }
 
     pub fn info(&mut self, s: &str) {
-        self.log_area.write_string(s, self.color_codes.info_color, self.buffer);
+        self.log_area
+            .write_string(s, self.color_codes.info_color, self.buffer);
     }
 
     pub fn warn(&mut self, s: &str) {
-        self.log_area.write_string(s, self.color_codes.warn_color, self.buffer);
+        self.log_area
+            .write_string(s, self.color_codes.warn_color, self.buffer);
     }
 
     pub fn error(&mut self, s: &str) {
-        self.log_area.write_string(s, self.color_codes.error_color, self.buffer);
+        self.log_area
+            .write_string(s, self.color_codes.error_color, self.buffer);
     }
 
     pub fn input(&mut self, s: &str) {
-        self.input_area.write_string(s, self.color_codes.input_color, self.buffer);
+        self.input_area
+            .write_string(s, self.color_codes.input_color, self.buffer);
     }
 }
 

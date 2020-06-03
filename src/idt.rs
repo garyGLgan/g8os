@@ -1,14 +1,14 @@
 use crate::hlt_loop;
 use crate::{print, println};
+use core::sync::atomic::{AtomicU64, Ordering};
 use lazy_static::lazy_static;
 use pic8259_simple::ChainedPics;
 use spin;
 use x86_64::structures::idt::PageFaultErrorCode;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
-use core::sync::atomic::{AtomicU64, Ordering};
 
 use crate::gdt;
-use crate::{info, error, debug, warn};
+use crate::{debug, error, info, warn};
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
@@ -69,7 +69,7 @@ extern "x86-interrupt" fn double_fault_handler(
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: &mut InterruptStackFrame) {
     static NEXT_ID: AtomicU64 = AtomicU64::new(0);
     let i = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    if i % 6 ==0 {
+    if i % 6 == 0 {
         let j = i / 6;
 
         match j % 4 {
@@ -86,9 +86,11 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: &mut InterruptSt
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: &mut InterruptStackFrame) {
+    use crate::task::keyboard;
     use x86_64::instructions::port::Port;
     let mut port = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
+    keyboard::add_scancode(scancode);
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());

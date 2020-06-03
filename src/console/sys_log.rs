@@ -1,5 +1,6 @@
 use super::vga_buffer;
 use crate::println;
+use crate::util::Flag;
 use alloc::{boxed::Box, string::String};
 use conquer_once::spin::OnceCell;
 use core::fmt::{Arguments, Error, Write};
@@ -9,14 +10,12 @@ use core::{
 };
 use crossbeam_queue::ArrayQueue;
 use futures_util::{stream::Stream, stream::StreamExt, task::AtomicWaker};
-use crate::util::Flag;
 use spin::Mutex;
 
 static LOG_MSG_QUEUE: OnceCell<ArrayQueue<ScrnOut>> = OnceCell::uninit();
 static LOG_WAKER: AtomicWaker = AtomicWaker::new();
 static IS_STARTED: Mutex<Flag> = Mutex::new(Flag::new());
 static SYS_LOG_LEVEL: Mutex<SysLogLevel> = Mutex::new(SysLogLevel::new());
-
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
@@ -29,8 +28,8 @@ pub enum LogLevel {
 
 pub struct SysLogLevel(u8);
 
-impl SysLogLevel{
-    pub const fn new() -> Self{
+impl SysLogLevel {
+    pub const fn new() -> Self {
         SysLogLevel(0)
     }
 
@@ -42,7 +41,7 @@ impl SysLogLevel{
         self.0 |= !(l as u8);
     }
 
-    fn is_on(&mut self, l: LogLevel) ->bool {
+    fn is_on(&mut self, l: LogLevel) -> bool {
         (self.0 & (l as u8)) > 0
     }
 
@@ -62,8 +61,8 @@ impl SysLogLevel{
 }
 
 pub enum ScrnOut {
-    LOG_MSG (LogLevel,String),
-    INPUT_MSG (String),
+    LOG_MSG(LogLevel, String),
+    INPUT_MSG(String),
 }
 
 impl ScrnOut {
@@ -71,11 +70,20 @@ impl ScrnOut {
         use x86_64::instructions::interrupts;
 
         match self {
-            Self::LOG_MSG (LogLevel::ERROR, msg) => vga_buffer::WRITER.lock().error(msg.as_ref()),
-            Self::LOG_MSG (LogLevel::WARN, msg) => vga_buffer::WRITER.lock().warn(msg.as_ref()),
-            Self::LOG_MSG (LogLevel::DEBUG, msg) => vga_buffer::WRITER.lock().debug(msg.as_ref()),
-            Self::LOG_MSG (LogLevel::INFO, msg) => vga_buffer::WRITER.lock().info(msg.as_ref()),
+            Self::LOG_MSG(LogLevel::ERROR, msg) if SYS_LOG_LEVEL.lock().is_on(LogLevel::ERROR) => {
+                vga_buffer::WRITER.lock().error(msg.as_ref())
+            }
+            Self::LOG_MSG(LogLevel::WARN, msg) if SYS_LOG_LEVEL.lock().is_on(LogLevel::WARN) => {
+                vga_buffer::WRITER.lock().warn(msg.as_ref())
+            }
+            Self::LOG_MSG(LogLevel::DEBUG, msg) if SYS_LOG_LEVEL.lock().is_on(LogLevel::DEBUG) => {
+                vga_buffer::WRITER.lock().debug(msg.as_ref())
+            }
+            Self::LOG_MSG(LogLevel::INFO, msg) if SYS_LOG_LEVEL.lock().is_on(LogLevel::INFO) => {
+                vga_buffer::WRITER.lock().info(msg.as_ref())
+            }
             Self::INPUT_MSG(msg) => vga_buffer::WRITER.lock().input(msg.as_ref()),
+            Self::LOG_MSG(_, _) => (),
         }
     }
 }
@@ -112,7 +120,7 @@ impl Stream for LogMsgStream {
     }
 }
 
-fn _fmt( args: Arguments) -> String {
+fn _fmt(args: Arguments) -> String {
     fn write<W: Write>(f: &mut W, args: Arguments) -> Result<(), Error> {
         f.write_fmt(args)
     };
@@ -126,7 +134,7 @@ fn push_msg(msg: ScrnOut) {
     if let Ok(queue) = LOG_MSG_QUEUE.try_get() {
         if let Err(_) = queue.push(msg) {
             println!("WRNING: log msg queue full; drop log message");
-        }else {
+        } else {
             LOG_WAKER.wake();
         }
     } else {
@@ -142,11 +150,9 @@ pub fn _log(level: LogLevel, args: Arguments) {
 
 pub fn _input(args: Arguments) {
     if IS_STARTED.lock().get() {
-        push_msg(ScrnOut::INPUT_MSG( _fmt(args)));
+        push_msg(ScrnOut::INPUT_MSG(_fmt(args)));
     }
 }
-
-
 
 pub fn init() {
     LOG_MSG_QUEUE
@@ -160,7 +166,7 @@ pub async fn print_log() {
     let mut log_msgs = LogMsgStream::new();
 
     while let Some(log_msg) = log_msgs.next().await {
-        log_msg.print(); 
+        log_msg.print();
     }
 }
 

@@ -1,13 +1,13 @@
 use crate::kernel_const::FRAME_SIZE;
 use crate::memory::frame_controller::FRAME_ALLOC;
 use crate::memory::paging::g8_page_table::PAGE_TABLE;
+use crate::println;
 use crate::util::Locked;
 use alloc::alloc::{GlobalAlloc, Layout};
 use x86_64::{
     structures::paging::{mapper::MapToError, PageTableFlags, Size2MiB, UnusedPhysFrame},
     VirtAddr,
 };
-use crate::println;
 
 const HEAP_MAX_BLOCKS: u64 = 0x4000000; // max heap size 128G
 const HEAP_BLOCK_SIZE: u64 = 64; // matches cache line
