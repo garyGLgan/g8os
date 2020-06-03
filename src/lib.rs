@@ -32,16 +32,22 @@ use task::{executor::Executor, Task};
 
 use x86_64::VirtAddr;
 
+pub static mut  IS_STARTED: bool = false;
+
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
     println!("Welcom to G8 OS!");
     println!("Auth: Gary Gan");
     init();
-    many_boxes_alloc_test();
+    // many_boxes_alloc_test();
 
+    sys_log::init();
     let mut executor = Executor::new(); // new
     executor.spawn(Task::new(sys_log::print_log()));
+    warn!("system started");
+    IS_STARTED = true;
     executor.run();
+    // hlt_loop();
 }
 
 pub fn hlt_loop() -> ! {
@@ -70,7 +76,7 @@ fn many_boxes_alloc_test() {
     print!("many_boxes_alloc_test... ");
 
     let mut v_box = Vec::<Box<i32>>::new();
-    for i in 0..1000000 {
+    for i in 0..10 {
         let x = Box::new(i);
         if *x != i {
             panic!("error the value in box is not correct");
@@ -78,6 +84,12 @@ fn many_boxes_alloc_test() {
         v_box.push(x);
     }
     println!("[ok]");
+}
+
+pub fn is_started() -> bool{
+    unsafe{
+        IS_STARTED
+    }
 }
 
 #[panic_handler]

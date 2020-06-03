@@ -7,6 +7,7 @@ use x86_64::{
     structures::paging::{mapper::MapToError, PageTableFlags, Size2MiB, UnusedPhysFrame},
     VirtAddr,
 };
+use crate::println;
 
 const HEAP_MAX_BLOCKS: u64 = 0x4000000; // max heap size 128G
 const HEAP_BLOCK_SIZE: u64 = 64; // matches cache line
@@ -44,6 +45,9 @@ impl BitMask {
     }
 
     fn split_pos(&self, pos: u64) -> (usize, u64) {
+        if pos >= self.size {
+            println!("pos:{} < self.size:{}", pos, self.size);
+        }
         assert!(pos < self.size);
         ((pos >> 6) as usize, 1 << (63 - (pos & 0x3f)))
     }
@@ -75,6 +79,9 @@ impl FreeBlock {
     }
 
     unsafe fn expand_backward(&mut self, addr: u64, size: u64) -> &mut Self {
+        // if addr != self.end_addr() {
+        //     println!("add:{} != end_addr:{}", addr, self.end_addr());
+        // }
         assert!(addr == self.end_addr());
         self.size += size;
         self.write_addr_at_end();

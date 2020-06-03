@@ -12,6 +12,7 @@ use futures_util::{stream::Stream, stream::StreamExt, task::AtomicWaker};
 
 static LOG_MSG_QUEUE: OnceCell<ArrayQueue<LogMsg>> = OnceCell::uninit();
 static LOG_WAKER: AtomicWaker = AtomicWaker::new();
+static mut IS_STARTED: bool = false;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
@@ -53,9 +54,6 @@ pub struct LogMsgStream {
 
 impl LogMsgStream {
     pub fn new() -> Self {
-        LOG_MSG_QUEUE
-            .try_init_once(|| ArrayQueue::new(1000))
-            .expect("LogMsgStream::new should only the called once");
         LogMsgStream { _private: () }
     }
 }
@@ -83,47 +81,69 @@ impl Stream for LogMsgStream {
 }
 
 pub fn _log(level: LogLevel, args: Arguments) {
+    if !is_started() {
+        return;
+    }
     fn write<W: Write>(f: &mut W, args: Arguments) -> Result<(), Error> {
         f.write_fmt(args)
     };
 
     let mut buf = String::new();
     write(&mut buf, args).unwrap();
+    let log_msg = LogMsg::new(level, buf);
+    
 
     if let Ok(queue) = LOG_MSG_QUEUE.try_get() {
-        let log_msg = LogMsg::new(level, buf);
         if let Err(_) = queue.push(log_msg) {
             println!("WRNING: log msg queue full; drop log message");
+        }else {
+            LOG_WAKER.wake();
         }
     } else {
         println!("WRING: log msg queue uninitialized");
     }
 }
 
+pub fn is_started() -> bool {
+    unsafe{
+        IS_STARTED
+    }
+}
+
+pub fn init() {
+    LOG_MSG_QUEUE
+        .try_init_once(|| ArrayQueue::new(1000))
+        .expect("LogMsgStream::new should only the called once");
+    unsafe{
+        IS_STARTED = true;
+    }
+}
+
 pub async fn print_log() {
+    println!("print_log");
     let mut log_msgs = LogMsgStream::new();
 
     while let Some(log_msg) = log_msgs.next().await {
-        log_msg.print();
+        log_msg.print(); 
     }
 }
 
 #[macro_export]
 macro_rules! info {
-    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::INFO, format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::INFO, format_args!("{}\n", format_args!($($arg)*))));
 }
 
 #[macro_export]
 macro_rules! debug {
-    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::DEBUG, format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::DEBUG, format_args!("{}\n", format_args!($($arg)*))));
 }
 
 #[macro_export]
 macro_rules! warn {
-    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::WARN, format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::WARN, format_args!("{}\n", format_args!($($arg)*))));
 }
 
 #[macro_export]
 macro_rules! error {
-    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::ERROR, format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::ERROR, format_args!("{}\n", format_args!($($arg)*))));
 }

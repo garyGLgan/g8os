@@ -5,9 +5,10 @@ use pic8259_simple::ChainedPics;
 use spin;
 use x86_64::structures::idt::PageFaultErrorCode;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
+use core::sync::atomic::{AtomicU64, Ordering};
 
-// use crate::gdt;
-use crate::{info, warn};
+use crate::gdt;
+use crate::{info, error, debug, warn};
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
@@ -66,7 +67,18 @@ extern "x86-interrupt" fn double_fault_handler(
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: &mut InterruptStackFrame) {
-    info!("timer {}", 1);
+    static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+    let i = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    if i % 6 ==0 {
+        let j = i / 6;
+
+        match j % 4 {
+            0 => error!("time: {}", j),
+            1 => warn!("time: {}", j),
+            3 => debug!("time: {}", j),
+            _ => info!("time: {}", j),
+        };
+    }
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
