@@ -9,42 +9,74 @@ use core::{
 };
 use crossbeam_queue::ArrayQueue;
 use futures_util::{stream::Stream, stream::StreamExt, task::AtomicWaker};
+use crate::util::Flag;
+use spin::Mutex;
 
-static LOG_MSG_QUEUE: OnceCell<ArrayQueue<LogMsg>> = OnceCell::uninit();
+static LOG_MSG_QUEUE: OnceCell<ArrayQueue<ScrnOut>> = OnceCell::uninit();
 static LOG_WAKER: AtomicWaker = AtomicWaker::new();
-static mut IS_STARTED: bool = false;
+static IS_STARTED: Mutex<Flag> = Mutex::new(Flag::new());
+static SYS_LOG_LEVEL: Mutex<SysLogLevel> = Mutex::new(SysLogLevel::new());
+
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum LogLevel {
-    ERROR = 0,
-    WARN,
-    INFO,
-    DEBUG,
+    ERROR = 1,
+    WARN = 2,
+    INFO = 4,
+    DEBUG = 8,
 }
 
-pub struct LogMsg {
-    level: LogLevel,
-    msg: String,
-}
+pub struct SysLogLevel(u8);
 
-impl LogMsg {
-    fn new(log_level: LogLevel, msg: String) -> Self {
-        LogMsg {
-            level: log_level,
-            msg,
-        }
+impl SysLogLevel{
+    pub const fn new() -> Self{
+        SysLogLevel(0)
     }
 
+    fn on(&mut self, l: LogLevel) {
+        self.0 |= (l as u8);
+    }
+
+    fn off(&mut self, l: LogLevel) {
+        self.0 |= !(l as u8);
+    }
+
+    fn is_on(&mut self, l: LogLevel) ->bool {
+        (self.0 & (l as u8)) > 0
+    }
+
+    pub fn conf(&mut self, cmd: &str) {
+        match cmd {
+            "LD1" => self.on(LogLevel::DEBUG),
+            "LD0" => self.off(LogLevel::DEBUG),
+            "LE0" => self.on(LogLevel::ERROR),
+            "LE1" => self.off(LogLevel::ERROR),
+            "LI0" => self.on(LogLevel::INFO),
+            "LI1" => self.off(LogLevel::INFO),
+            "LW0" => self.on(LogLevel::WARN),
+            "LW1" => self.off(LogLevel::WARN),
+            _ => panic!("unsupported command"),
+        }
+    }
+}
+
+pub enum ScrnOut {
+    LOG_MSG (LogLevel,String),
+    INPUT_MSG (String),
+}
+
+impl ScrnOut {
     fn print(&self) {
         use x86_64::instructions::interrupts;
 
-        interrupts::without_interrupts(|| match self.level {
-            LogLevel::ERROR => vga_buffer::WRITER.lock().error(self.msg.as_ref()),
-            LogLevel::WARN => vga_buffer::WRITER.lock().warn(self.msg.as_ref()),
-            LogLevel::DEBUG => vga_buffer::WRITER.lock().debug(self.msg.as_ref()),
-            LogLevel::INFO => vga_buffer::WRITER.lock().info(self.msg.as_ref()),
-        });
+        match self {
+            Self::LOG_MSG (LogLevel::ERROR, msg) => vga_buffer::WRITER.lock().error(msg.as_ref()),
+            Self::LOG_MSG (LogLevel::WARN, msg) => vga_buffer::WRITER.lock().warn(msg.as_ref()),
+            Self::LOG_MSG (LogLevel::DEBUG, msg) => vga_buffer::WRITER.lock().debug(msg.as_ref()),
+            Self::LOG_MSG (LogLevel::INFO, msg) => vga_buffer::WRITER.lock().info(msg.as_ref()),
+            Self::INPUT_MSG(msg) => vga_buffer::WRITER.lock().input(msg.as_ref()),
+        }
     }
 }
 
@@ -59,9 +91,9 @@ impl LogMsgStream {
 }
 
 impl Stream for LogMsgStream {
-    type Item = LogMsg;
+    type Item = ScrnOut;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<LogMsg>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<ScrnOut>> {
         let queue = LOG_MSG_QUEUE
             .try_get()
             .expect("Log message queue no initialized");
@@ -80,21 +112,19 @@ impl Stream for LogMsgStream {
     }
 }
 
-pub fn _log(level: LogLevel, args: Arguments) {
-    if !is_started() {
-        return;
-    }
+fn _fmt( args: Arguments) -> String {
     fn write<W: Write>(f: &mut W, args: Arguments) -> Result<(), Error> {
         f.write_fmt(args)
     };
 
     let mut buf = String::new();
     write(&mut buf, args).unwrap();
-    let log_msg = LogMsg::new(level, buf);
-    
+    buf
+}
 
+fn push_msg(msg: ScrnOut) {
     if let Ok(queue) = LOG_MSG_QUEUE.try_get() {
-        if let Err(_) = queue.push(log_msg) {
+        if let Err(_) = queue.push(msg) {
             println!("WRNING: log msg queue full; drop log message");
         }else {
             LOG_WAKER.wake();
@@ -104,23 +134,29 @@ pub fn _log(level: LogLevel, args: Arguments) {
     }
 }
 
-pub fn is_started() -> bool {
-    unsafe{
-        IS_STARTED
+pub fn _log(level: LogLevel, args: Arguments) {
+    if IS_STARTED.lock().get() {
+        push_msg(ScrnOut::LOG_MSG(level, _fmt(args)));
     }
 }
+
+pub fn _input(args: Arguments) {
+    if IS_STARTED.lock().get() {
+        push_msg(ScrnOut::INPUT_MSG( _fmt(args)));
+    }
+}
+
+
 
 pub fn init() {
     LOG_MSG_QUEUE
         .try_init_once(|| ArrayQueue::new(1000))
         .expect("LogMsgStream::new should only the called once");
-    unsafe{
-        IS_STARTED = true;
-    }
+    IS_STARTED.lock().on();
+    SYS_LOG_LEVEL.lock().on(LogLevel::ERROR);
 }
 
 pub async fn print_log() {
-    println!("print_log");
     let mut log_msgs = LogMsgStream::new();
 
     while let Some(log_msg) = log_msgs.next().await {
@@ -146,4 +182,9 @@ macro_rules! warn {
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => ($crate::console::sys_log::_log($crate::console::sys_log::LogLevel::ERROR, format_args!("{}\n", format_args!($($arg)*))));
+}
+
+#[macro_export]
+macro_rules! input {
+    ($($arg:tt)*) => ($crate::console::sys_log::_input(format_args!($($arg)*)));
 }

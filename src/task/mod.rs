@@ -7,6 +7,7 @@ use core::{
 };
 
 pub mod executor;
+pub mod keyboard;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 struct TaskId(u64);

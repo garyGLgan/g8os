@@ -1,4 +1,5 @@
 use core::fmt;
+use core::ops::Range;
 use lazy_static::lazy_static;
 use spin::Mutex;
 use volatile::Volatile;
@@ -8,11 +9,12 @@ use volatile::Volatile;
 
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
-        column_position: 0,
+        log_area: WriterArea::new(0..BUFFER_HEIGHT-2, ColorCode::new(Color::Black, Color::Black)),
+        input_area: WriterArea::new(0..BUFFER_HEIGHT-1, ColorCode::new(Color::Black, Color::Black)),
         color_codes: ColorCodes {
-            debug_color: ColorCode::new(Color::Yellow, Color::Black),
+            debug_color: ColorCode::new(Color::Cyan, Color::Black),
             info_color: ColorCode::new(Color::LightGray, Color::Black),
-            warn_color: ColorCode::new(Color::Pink, Color::Black),
+            warn_color: ColorCode::new(Color::Yellow, Color::Black),
             error_color: ColorCode::new(Color::Red, Color::Black),
             input_color: ColorCode::new(Color::White, Color::Black),
             blank_color: ColorCode::new(Color::Black, Color::Black),
@@ -78,25 +80,33 @@ struct Buffer {
     chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
 }
 
-pub struct Writer {
+pub struct WriterArea {
+    row_range: Range<usize>,
     column_position: usize,
-    color_codes: ColorCodes,
-    buffer: &'static mut Buffer,
+    blank_color: ColorCode,
 }
 
-impl Writer {
-    fn write_byte(&mut self, byte: u8, color: ColorCode) {
+impl WriterArea {
+    fn new(r: Range<usize>, blank_color: ColorCode) -> Self {
+        WriterArea{
+            row_range: r,
+            column_position: 0,
+            blank_color,
+        }
+    }
+
+    fn write_byte(&mut self,  byte: u8, color: ColorCode, buffer: &mut Buffer){
         match byte {
-            b'\n' => self.new_line(),
+            b'\n' => self.new_line(buffer),
             byte => {
                 if self.column_position >= BUFFER_WIDTH {
-                    self.new_line();
+                    self.new_line(buffer);
                 }
 
-                let row = BUFFER_HEIGHT - 2;
+                let row = self.row_range.end;
                 let col = self.column_position;
 
-                self.buffer.chars[row][col].write(ScreenChar {
+                buffer.chars[row][col].write(ScreenChar {
                     ascii_character: byte,
                     color_code: color,
                 });
@@ -105,51 +115,73 @@ impl Writer {
         }
     }
 
-    pub fn debug(&mut self, s: &str) {
-        self.write_string(s, self.color_codes.debug_color);
-    }
-
-    pub fn info(&mut self, s: &str) {
-        self.write_string(s, self.color_codes.info_color);
-    }
-
-    pub fn warn(&mut self, s: &str) {
-        self.write_string(s, self.color_codes.warn_color);
-    }
-
-    pub fn error(&mut self, s: &str) {
-        self.write_string(s, self.color_codes.error_color);
-    }
-
-    fn write_string(&mut self, s: &str, color: ColorCode) {
-        for byte in s.bytes() {
+    fn write_string(&mut self, s: &str, color: ColorCode, buffer: &mut Buffer) {
+        for byte in s.bytes(){
             match byte {
-                0x20..=0x7e | b'\n' => self.write_byte(byte, color),
-                _ => self.write_byte(0xfe, color),
+                0x20..=0x7e | b'\n' => self.write_byte(byte, color, buffer),
+                _ => self.write_byte(0xfe, color, buffer),
             }
         }
     }
 
-    fn new_line(&mut self) {
-        for row in 1..BUFFER_HEIGHT {
+    fn new_line(&mut self, buffer: &mut Buffer) {
+        for row in self.row_range.start..self.row_range.end {
             for col in 0..BUFFER_WIDTH {
-                let character = self.buffer.chars[row][col].read();
-                self.buffer.chars[row - 1][col].write(character);
+                let character = buffer.chars[row][col].read();
+                buffer.chars[row - 1][col].write(character);
             }
         }
-        self.clear_row(BUFFER_HEIGHT - 1);
+        self.clear_row( buffer);
         self.column_position = 0;
     }
 
-    fn clear_row(&mut self, row: usize) {
+    fn clear_row(&mut self, buffer: &mut Buffer) {
         let blank = ScreenChar {
             ascii_character: b' ',
-            color_code: self.color_codes.blank_color,
+            color_code: self.blank_color,
         };
 
         for col in 0..BUFFER_WIDTH {
-            self.buffer.chars[row][col].write(blank);
+            buffer.chars[self.row_range.end][col].write(blank);
         }
+    }
+}
+
+pub struct Writer {
+    input_area: WriterArea,
+    log_area: WriterArea,
+    color_codes: ColorCodes,
+    buffer: &'static mut Buffer,
+}
+
+impl Writer {
+
+    fn log_byte(&mut self, byte: u8, color: ColorCode) {
+        self.log_area.write_byte(byte, color, self.buffer);
+    }
+
+    fn input_byte(&mut self, byte: u8, color: ColorCode) {
+        self.input_area.write_byte(byte, color, self.buffer);
+    }
+
+    pub fn debug(&mut self, s: &str) {
+        self.log_area.write_string(s, self.color_codes.debug_color, self.buffer);
+    }
+
+    pub fn info(&mut self, s: &str) {
+        self.log_area.write_string(s, self.color_codes.info_color, self.buffer);
+    }
+
+    pub fn warn(&mut self, s: &str) {
+        self.log_area.write_string(s, self.color_codes.warn_color, self.buffer);
+    }
+
+    pub fn error(&mut self, s: &str) {
+        self.log_area.write_string(s, self.color_codes.error_color, self.buffer);
+    }
+
+    pub fn input(&mut self, s: &str) {
+        self.input_area.write_string(s, self.color_codes.input_color, self.buffer);
     }
 }
 
@@ -180,40 +212,3 @@ pub fn _print(args: fmt::Arguments) {
         WRITER.lock().write_fmt(args).unwrap();
     });
 }
-
-// #[test_case]
-// fn test_println_simple() {
-//     serial_print!("test_println...");
-//     println!("test_println_simple output");
-//     serial_println!("[Ok]");
-// }
-
-// #[test_case]
-// fn test_println_many() {
-//     serial_print!("test_println_many...");
-//     for _ in 0..200 {
-//         println!("test_println_many output");
-//     }
-//     serial_println!("[Ok]");
-// }
-
-// #[test_case]
-// fn test_println_output() {
-//     use core::fmt::Write;
-//     use x86_64::instructions::interrupts;
-
-//     serial_print!("test_println_output");
-
-//     let s = "Some test string that fits on a single line";
-
-//     interrupts::without_interrupts(|| {
-//         let mut writer = WRITER.lock();
-//         writeln!(writer, "\n{}", s).expect("writerln failed");
-
-//         for (i, c) in s.chars().enumerate() {
-//             let screen_char = writer.buffer.chars[BUFFER_HEIGHT - 2][i].read();
-//             assert_eq!(char::from(screen_char.ascii_character), c);
-//         }
-//     });
-//     serial_println!("[Ok]");
-// }
