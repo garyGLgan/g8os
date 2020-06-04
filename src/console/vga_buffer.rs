@@ -6,6 +6,7 @@ use volatile::Volatile;
 
 // #[cfg(test)]
 // use crate::{serial_print, serial_println};
+use crate::no_interrupt;
 
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> =
@@ -190,36 +191,36 @@ pub struct Writer {
 
 impl Writer {
     fn log_byte(&mut self, byte: u8, color: ColorCode) {
-        self.log_row.write_byte(byte, color, self.buffer,&mut self.scroll_area);
+        no_interrupt!(||self.log_row.write_byte(byte, color, self.buffer,&mut self.scroll_area));
     }
 
     fn input_byte(&mut self, byte: u8, color: ColorCode) {
-        self.input_row.write_byte(byte, color, self.buffer, &mut self.scroll_area);
+        no_interrupt!(||self.input_row.write_byte(byte, color, self.buffer, &mut self.scroll_area));
     }
 
     pub fn debug(&mut self, s: &str) {
-        self.log_row
-            .write_string(s, self.color_codes.debug_color, self.buffer, &mut self.scroll_area);
+        no_interrupt!(||self.log_row
+            .write_string(s, self.color_codes.debug_color, self.buffer, &mut self.scroll_area));
     }
 
     pub fn info(&mut self, s: &str) {
-        self.log_row
-            .write_string(s, self.color_codes.info_color, self.buffer, &mut self.scroll_area);
+        no_interrupt!(||self.log_row
+            .write_string(s, self.color_codes.info_color, self.buffer, &mut self.scroll_area));
     }
 
     pub fn warn(&mut self, s: &str) {
-        self.log_row
-            .write_string(s, self.color_codes.warn_color, self.buffer, &mut self.scroll_area);
+        no_interrupt!(||self.log_row
+            .write_string(s, self.color_codes.warn_color, self.buffer, &mut self.scroll_area));
     }
 
     pub fn error(&mut self, s: &str) {
-        self.log_row
-            .write_string(s, self.color_codes.error_color, self.buffer, &mut self.scroll_area);
+        no_interrupt!(||self.log_row
+            .write_string(s, self.color_codes.error_color, self.buffer, &mut self.scroll_area));
     }
 
     pub fn input(&mut self, s: &str) {
-        self.input_row
-            .write_string(s, self.color_codes.input_color, self.buffer, &mut self.scroll_area);
+        no_interrupt!(||self.input_row
+            .write_string(s, self.color_codes.input_color, self.buffer, &mut self.scroll_area));
     }
 }
 
@@ -228,6 +229,11 @@ impl fmt::Write for Writer {
         self.info(s);
         Ok(())
     }
+}
+
+#[macro_export]
+macro_rules! no_interrupt {
+    ($($arg:tt)*) => (x86_64::instructions::interrupts::without_interrupts($($arg)*));
 }
 
 #[macro_export]

@@ -67,8 +67,6 @@ pub enum ScrnOut {
 
 impl ScrnOut {
     fn print(&self) {
-        use x86_64::instructions::interrupts;
-
         match self {
             Self::LOG_MSG(LogLevel::ERROR, msg) if SYS_LOG_LEVEL.lock().is_on(LogLevel::ERROR) => {
                 vga_buffer::WRITER.lock().error(msg.as_ref())
