@@ -9,27 +9,26 @@ use volatile::Volatile;
 use crate::no_interrupt;
 
 lazy_static! {
-    pub static ref WRITER: Mutex<Writer> =
-        Mutex::new(Writer {
-            log_row: BufferLine::new(
-                BUFFER_HEIGHT - 2,
-                ColorCode::new(Color::Black, Color::Black)
-            ),
-            input_row: BufferLine::new(
-                BUFFER_HEIGHT - 1,
-                ColorCode::new(Color::Black, Color::Black)
-            ),
-            color_codes: ColorCodes {
-                debug_color: ColorCode::new(Color::Cyan, Color::Black),
-                info_color: ColorCode::new(Color::LightGray, Color::Black),
-                warn_color: ColorCode::new(Color::Yellow, Color::Black),
-                error_color: ColorCode::new(Color::Red, Color::Black),
-                input_color: ColorCode::new(Color::White, Color::Black),
-                blank_color: ColorCode::new(Color::Black, Color::Black),
-            },
-            buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
-            scroll_area: ScrollArea::new(0..BUFFER_HEIGHT-3),
-        }); 
+    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
+        log_row: BufferLine::new(
+            BUFFER_HEIGHT - 2,
+            ColorCode::new(Color::Black, Color::Black)
+        ),
+        input_row: BufferLine::new(
+            BUFFER_HEIGHT - 1,
+            ColorCode::new(Color::Black, Color::Black)
+        ),
+        color_codes: ColorCodes {
+            debug_color: ColorCode::new(Color::Cyan, Color::Black),
+            info_color: ColorCode::new(Color::LightGray, Color::Black),
+            warn_color: ColorCode::new(Color::Yellow, Color::Black),
+            error_color: ColorCode::new(Color::Red, Color::Black),
+            input_color: ColorCode::new(Color::White, Color::Black),
+            blank_color: ColorCode::new(Color::Black, Color::Black),
+        },
+        buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
+        scroll_area: ScrollArea::new(0..BUFFER_HEIGHT - 3),
+    });
 }
 
 #[allow(dead_code)]
@@ -90,13 +89,16 @@ struct Buffer {
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScrollArea {
-    start: usize, 
+    start: usize,
     end: usize,
 }
 
 impl ScrollArea {
     fn new(r: Range<usize>) -> Self {
-        ScrollArea {start: r.start, end: r.end}
+        ScrollArea {
+            start: r.start,
+            end: r.end,
+        }
     }
 
     fn scroll_append_line(&mut self, row: usize, buffer: &mut Buffer) {
@@ -105,27 +107,25 @@ impl ScrollArea {
     }
 
     fn scroll(&mut self, buffer: &mut Buffer) {
-        if self.end - self.start >=1 {
+        if self.end - self.start >= 1 {
             for row in self.start..self.end {
                 for col in 0..BUFFER_WIDTH {
-                    self.move_line(row+1, row, buffer);
+                    self.move_line(row + 1, row, buffer);
                 }
             }
         }
     }
 
-    fn move_line(&mut self, source: usize, target: usize, buffer: &mut Buffer){
+    fn move_line(&mut self, source: usize, target: usize, buffer: &mut Buffer) {
         for col in 0..BUFFER_WIDTH {
             let character = buffer.chars[source][col].read();
             buffer.chars[target][col].write(character);
         }
     }
-
-    
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct BufferLine{
+struct BufferLine {
     row: usize,
     column_position: usize,
     blank_color: ColorCode,
@@ -133,10 +133,20 @@ struct BufferLine{
 
 impl BufferLine {
     fn new(row: usize, blank_color: ColorCode) -> Self {
-        BufferLine{row: row, column_position: 0, blank_color: blank_color}
+        BufferLine {
+            row: row,
+            column_position: 0,
+            blank_color: blank_color,
+        }
     }
 
-    fn write_byte(&mut self, byte: u8, color: ColorCode, buffer: &mut Buffer, scroll_area: &mut ScrollArea){
+    fn write_byte(
+        &mut self,
+        byte: u8,
+        color: ColorCode,
+        buffer: &mut Buffer,
+        scroll_area: &mut ScrollArea,
+    ) {
         match byte {
             b'\n' => self.refresh(buffer, scroll_area),
             byte => {
@@ -155,7 +165,7 @@ impl BufferLine {
         }
     }
 
-    fn refresh(&mut self, buffer: &mut Buffer, scroll_area: &mut ScrollArea){
+    fn refresh(&mut self, buffer: &mut Buffer, scroll_area: &mut ScrollArea) {
         scroll_area.scroll_append_line(self.row, buffer);
         self.clear(buffer);
         self.column_position = 0;
@@ -171,7 +181,13 @@ impl BufferLine {
         }
     }
 
-    fn write_string(&mut self, s: &str, color: ColorCode, buffer: &mut Buffer, scroll_area: &mut ScrollArea) {
+    fn write_string(
+        &mut self,
+        s: &str,
+        color: ColorCode,
+        buffer: &mut Buffer,
+        scroll_area: &mut ScrollArea,
+    ) {
         for byte in s.bytes() {
             match byte {
                 0x20..=0x7e | b'\n' => self.write_byte(byte, color, buffer, scroll_area),
@@ -191,36 +207,58 @@ pub struct Writer {
 
 impl Writer {
     fn log_byte(&mut self, byte: u8, color: ColorCode) {
-        no_interrupt!(||self.log_row.write_byte(byte, color, self.buffer,&mut self.scroll_area));
+        self.log_row
+            .write_byte(byte, color, self.buffer, &mut self.scroll_area);
     }
 
     fn input_byte(&mut self, byte: u8, color: ColorCode) {
-        no_interrupt!(||self.input_row.write_byte(byte, color, self.buffer, &mut self.scroll_area));
+        self.input_row
+            .write_byte(byte, color, self.buffer, &mut self.scroll_area);
     }
 
     pub fn debug(&mut self, s: &str) {
-        no_interrupt!(||self.log_row
-            .write_string(s, self.color_codes.debug_color, self.buffer, &mut self.scroll_area));
+        self.log_row.write_string(
+            s,
+            self.color_codes.debug_color,
+            self.buffer,
+            &mut self.scroll_area,
+        );
     }
 
     pub fn info(&mut self, s: &str) {
-        no_interrupt!(||self.log_row
-            .write_string(s, self.color_codes.info_color, self.buffer, &mut self.scroll_area));
+        self.log_row.write_string(
+            s,
+            self.color_codes.info_color,
+            self.buffer,
+            &mut self.scroll_area,
+        );
     }
 
     pub fn warn(&mut self, s: &str) {
-        no_interrupt!(||self.log_row
-            .write_string(s, self.color_codes.warn_color, self.buffer, &mut self.scroll_area));
+        self.log_row.write_string(
+            s,
+            self.color_codes.warn_color,
+            self.buffer,
+            &mut self.scroll_area,
+        );
     }
 
     pub fn error(&mut self, s: &str) {
-        no_interrupt!(||self.log_row
-            .write_string(s, self.color_codes.error_color, self.buffer, &mut self.scroll_area));
+        self.log_row.write_string(
+            s,
+            self.color_codes.error_color,
+            self.buffer,
+            &mut self.scroll_area,
+        );
     }
 
     pub fn input(&mut self, s: &str) {
-        no_interrupt!(||self.input_row
-            .write_string(s, self.color_codes.input_color, self.buffer, &mut self.scroll_area));
+        no_interrupt!(|| self.input_row.write_string(
+            s,
+            self.color_codes.input_color,
+            self.buffer,
+            &mut self.scroll_area
+        ));
     }
 }
 
@@ -229,11 +267,6 @@ impl fmt::Write for Writer {
         self.info(s);
         Ok(())
     }
-}
-
-#[macro_export]
-macro_rules! no_interrupt {
-    ($($arg:tt)*) => (x86_64::instructions::interrupts::without_interrupts($($arg)*));
 }
 
 #[macro_export]

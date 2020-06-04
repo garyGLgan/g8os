@@ -35,3 +35,8 @@ impl Flag {
         self.0
     }
 }
+
+#[macro_export]
+macro_rules! no_interrupt {
+    ($($arg:tt)*) => (x86_64::instructions::interrupts::without_interrupts($($arg)*));
+}

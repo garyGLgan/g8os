@@ -17,6 +17,8 @@ static LOG_WAKER: AtomicWaker = AtomicWaker::new();
 static IS_STARTED: Mutex<Flag> = Mutex::new(Flag::new());
 static SYS_LOG_LEVEL: Mutex<SysLogLevel> = Mutex::new(SysLogLevel::new());
 
+use crate::no_interrupt;
+
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum LogLevel {
@@ -69,18 +71,18 @@ impl ScrnOut {
     fn print(&self) {
         match self {
             Self::LOG_MSG(LogLevel::ERROR, msg) if SYS_LOG_LEVEL.lock().is_on(LogLevel::ERROR) => {
-                vga_buffer::WRITER.lock().error(msg.as_ref())
+                no_interrupt!(||vga_buffer::WRITER.lock().error(msg.as_ref()))
             }
             Self::LOG_MSG(LogLevel::WARN, msg) if SYS_LOG_LEVEL.lock().is_on(LogLevel::WARN) => {
-                vga_buffer::WRITER.lock().warn(msg.as_ref())
+                no_interrupt!(||vga_buffer::WRITER.lock().warn(msg.as_ref()))
             }
             Self::LOG_MSG(LogLevel::DEBUG, msg) if SYS_LOG_LEVEL.lock().is_on(LogLevel::DEBUG) => {
-                vga_buffer::WRITER.lock().debug(msg.as_ref())
+                no_interrupt!(||vga_buffer::WRITER.lock().debug(msg.as_ref()))
             }
             Self::LOG_MSG(LogLevel::INFO, msg) if SYS_LOG_LEVEL.lock().is_on(LogLevel::INFO) => {
-                vga_buffer::WRITER.lock().info(msg.as_ref())
+                no_interrupt!(||vga_buffer::WRITER.lock().info(msg.as_ref()))
             }
-            Self::INPUT_MSG(msg) => vga_buffer::WRITER.lock().input(msg.as_ref()),
+            Self::INPUT_MSG(msg) => no_interrupt!(||vga_buffer::WRITER.lock().input(msg.as_ref())),
             Self::LOG_MSG(_, _) => (),
         }
     }

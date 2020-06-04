@@ -79,6 +79,14 @@ impl FreeBlock {
     }
 
     unsafe fn expand_backward(&mut self, addr: u64, size: u64) -> &mut Self {
+        if addr != self.end_addr() {
+            crate::println!(
+                "addr(0x{:x}) not equals end_addr(0x{:x}), start_addr(0x{:x})",
+                addr,
+                self.end_addr(),
+                self.start_addr(),
+            );
+        }
         assert!(addr == self.end_addr());
         self.size += size;
         self.write_addr_at_end();
