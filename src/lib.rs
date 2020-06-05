@@ -49,7 +49,6 @@ pub unsafe extern "C" fn g8start() {
     warn!("system started");
     IS_STARTED = true;
     executor.run();
-    // hlt_loop();
 }
 
 pub fn hlt_loop() -> ! {

@@ -20,6 +20,10 @@ lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
         idt.breakpoint.set_handler_fn(breakpoint_handler);
+        idt.overflow.set_handler_fn(overflow_handler);
+        idt.bound_range_exceeded.set_handler_fn(bound_range_exceeded_handler);
+        idt.invalid_opcode.set_handler_fn(invalid_opcode_handler);
+        idt.divide_error.set_handler_fn(divide_error_handler);
         unsafe {
             idt.double_fault
                 .set_handler_fn(double_fault_handler)
@@ -53,6 +57,22 @@ impl InterruptIndex {
     fn as_usize(self) -> usize {
         usize::from(self.as_u8())
     }
+}
+
+extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: &mut InterruptStackFrame) {
+    panic!("EXCEPTION: INVALID OPCODE\n{:#?}", stack_frame);
+}
+
+extern "x86-interrupt" fn bound_range_exceeded_handler(stack_frame: &mut InterruptStackFrame) {
+    panic!("EXCEPTION: BOUND RANGE EXCEEDED\n{:#?}", stack_frame);
+}
+
+extern "x86-interrupt" fn divide_error_handler(stack_frame: &mut InterruptStackFrame) {
+    panic!("EXCEPTION: DIVIDE BY ZERO\n{:#?}", stack_frame);
+}
+
+extern "x86-interrupt" fn overflow_handler(stack_frame: &mut InterruptStackFrame) {
+    panic!("EXCEPTION: OVER FLOW\n{:#?}", stack_frame);
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: &mut InterruptStackFrame) {
