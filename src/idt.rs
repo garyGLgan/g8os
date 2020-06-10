@@ -1,5 +1,6 @@
 use crate::hlt_loop;
 use crate::{print, println};
+use crate::task::sys_task::{add_sys_task, SysTask};
 use core::sync::atomic::{AtomicU64, Ordering};
 use lazy_static::lazy_static;
 use pic8259_simple::ChainedPics;
@@ -12,6 +13,9 @@ use crate::{debug, error, info, warn};
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
+
+
+static TIMMER_COUNT: AtomicU64 = AtomicU64::new(0);
 
 pub static PICS: spin::Mutex<ChainedPics> =
     spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
@@ -87,30 +91,20 @@ extern "x86-interrupt" fn double_fault_handler(
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: &mut InterruptStackFrame) {
-    static NEXT_ID: AtomicU64 = AtomicU64::new(0);
-    let i = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    if i % 6 == 0 {
-        let j = i / 6;
-
-        match j % 4 {
-            0 => error!("time: {}", j),
-            1 => warn!("time: {}", j),
-            3 => debug!("time: {}", j),
-            _ => info!("time: {}", j),
-        };
-    }
+    let i = TIMMER_COUNT.fetch_add(1, Ordering::Relaxed);
+    
+    add_sys_task(SysTask::TIMMER(i));
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
-    }
+    };
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: &mut InterruptStackFrame) {
-    use crate::task::keyboard;
     use x86_64::instructions::port::Port;
     let mut port = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
-    keyboard::add_scancode(scancode);
+    add_sys_task(SysTask::KEY(scancode));
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());

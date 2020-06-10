@@ -28,11 +28,10 @@ use kernel_const::STACK_BOTTOM;
 use memory::frame_controller::FRAME_ALLOC;
 use memory::heap_allocator;
 use memory::paging::g8_page_table::PAGE_TABLE;
-use task::{executor::Executor, keyboard, Task};
+use task::{executor::Executor, Task, sys_task};
 
 use x86_64::VirtAddr;
 
-pub static mut IS_STARTED: bool = false;
 
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
@@ -40,14 +39,11 @@ pub unsafe extern "C" fn g8start() {
     println!("Auth: Gary Gan");
     init();
     // many_boxes_alloc_test();
-
+    sys_task::init();
     sys_log::init();
-    keyboard::init();
     let mut executor = Executor::new(); // new
+    executor.spawn(Task::new(sys_task::run_sys_task()));
     executor.spawn(Task::new(sys_log::print_log()));
-    executor.spawn(Task::new(keyboard::handle_input()));
-    warn!("system started");
-    IS_STARTED = true;
     executor.run();
 }
 
@@ -85,10 +81,6 @@ fn many_boxes_alloc_test() {
         v_box.push(x);
     }
     println!("[ok]");
-}
-
-pub fn is_started() -> bool {
-    unsafe { IS_STARTED }
 }
 
 #[panic_handler]

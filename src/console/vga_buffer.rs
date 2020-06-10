@@ -253,12 +253,12 @@ impl Writer {
     }
 
     pub fn input(&mut self, s: &str) {
-        no_interrupt!(|| self.input_row.write_string(
+        self.input_row.write_string(
             s,
             self.color_codes.input_color,
             self.buffer,
             &mut self.scroll_area
-        ));
+        );
     }
 }
 

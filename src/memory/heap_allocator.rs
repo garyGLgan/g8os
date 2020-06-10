@@ -21,14 +21,14 @@ const HEAP_START_ADDR: u64 = 0x40000000;
 #[global_allocator]
 static ALLOCATOR: Locked<HeapAllocator> = Locked::new(HeapAllocator::new());
 
-lazy_static!{
-    static ref MASK: Mutex<BitMask> = unsafe{ 
-        Mutex::new(BitMask {
-                        size: 0,
-                        inner: &mut *(HEAP_MASK_START_ADDR as *mut [u64; HEAP_MAX_BLOCKS as usize]),
-                    })
-        };
-}
+// lazy_static!{
+//     static ref MASK: Mutex<BitMask> = unsafe{ 
+//         Mutex::new(BitMask {
+//                         size: 0,
+//                         inner: &mut *(HEAP_MASK_START_ADDR as *mut [u64; HEAP_MAX_BLOCKS as usize]),
+//                     })
+//         };
+// }
 
 
 const MASK_64: [u64; 65] = [
@@ -101,7 +101,7 @@ const MASK_64: [u64; 65] = [
 
 struct BitMask {
     size: u64,
-    inner: &'static mut [u64; HEAP_MAX_BLOCKS as usize],
+    inner:Option<&'static mut [u64; HEAP_MAX_BLOCKS as usize]>,
 }
 
 impl BitMask {
@@ -119,7 +119,7 @@ impl BitMask {
         let _m = get_mask_in_u64(m, m);
         let v = get_u64(HEAP_MASK_START_ADDR+p*8);
         let r = v & _m != 0;
-        println!("is_set, v:0x{:x}, _m:0x{:x}, r: {}", v, _m, r);
+        // println!("is_set, v:0x{:x}, _m:0x{:x}, r: {}", v, _m, r);
         r
     }
 
@@ -189,7 +189,7 @@ impl FreeBlock {
     }
 
     unsafe fn expand_backward(&mut self, addr: u64, size: u64) -> &mut Self {
-        println!("expand_backward, start:0x{:x}, end:0x{:x}, addr:0x{:x}", self.start_addr(), self.end_addr(), addr);
+        // println!("expand_backward, start:0x{:x}, end:0x{:x}, addr:0x{:x}", self.start_addr(), self.end_addr(), addr);
         assert!(addr == self.end_addr());
         self.size += size;
         self.write_addr_at_end();
@@ -263,6 +263,7 @@ impl FreeBlock {
 
 struct HeapAllocator {
     head: FreeBlock,
+    mask: BitMask,
     size: u64,
 }
 
@@ -274,6 +275,10 @@ impl HeapAllocator {
                 prev: None,
                 next: None,
             },
+            mask: BitMask {
+                size: 0,
+                inner: None,
+            },
             size: 0,
         }
     }
@@ -283,7 +288,7 @@ impl HeapAllocator {
     }
 
     pub unsafe fn expand(&mut self) -> Result<(), MapToError<Size2MiB>> {
-        println!("expand");
+        // println!("expand");
         let alloc_frame =
             || -> Result<(UnusedPhysFrame<Size2MiB>, PageTableFlags), MapToError<Size2MiB>> {
                 let frame = FRAME_ALLOC
@@ -312,13 +317,13 @@ impl HeapAllocator {
     }
 
     unsafe fn ins_merg_free_block(&mut self, addr: u64, size: u64) {
-        println!("ins_merg_free_block, addr:0x{:x}, size:{}", addr, size);
+        // println!("ins_merg_free_block, addr:0x{:x}, size:{}", addr, size);
         let s_off = (addr - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW;
         let e_off = (addr + size - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW;
         // println!("ins_merg_free_block");
-        let mask_size = MASK.lock().size;
-        let can_merge_pre = s_off > 0 && !MASK.lock().is_set(s_off - 1);
-        let can_merge_back = e_off < mask_size && !MASK.lock().is_set(e_off);
+        let mask_size = self.mask.size;
+        let can_merge_pre = s_off > 0 && !self.mask.is_set(s_off - 1);
+        let can_merge_back = e_off < mask_size && !self.mask.is_set(e_off);
         // println!("ins_merg_free_block, can_merge_pre:{}, can_merge_back:{}",can_merge_pre,can_merge_back);
         match (can_merge_pre, can_merge_back) {
             (true, true ) => {
@@ -346,11 +351,11 @@ impl HeapAllocator {
         }
         // println!("ins_merg_free_block, 5");
 
-        MASK.lock().range_off(s_off, e_off-1);
+        self.mask.range_off(s_off, e_off-1);
     }
 
     unsafe fn add_free_block(&mut self, addr: u64, size: u64) {
-        println!("add_free_block");
+        // println!("add_free_block");
         let _addr = self.head.start_addr();
         let block = FreeBlock {
             size,
@@ -368,27 +373,21 @@ impl HeapAllocator {
     }
 
     fn expand_mask(&mut self, frame: UnusedPhysFrame<Size2MiB>, flags: PageTableFlags) {
-        println!("expand_mask");
-        let s_off = MASK.lock().size;
+        // println!("expand_mask");
+        let s_off = self.mask.size;
         PAGE_TABLE
             .lock()
-            .map_to(VirtAddr::new(MASK.lock().boudry_addr()), frame, flags);
-            MASK.lock().size += 8 * FRAME_SIZE;
-        let e_off = MASK.lock().size-1;
+            .map_to(VirtAddr::new(self.mask.boudry_addr()), frame, flags);
+            self.mask.size += 8 * FRAME_SIZE;
+        let e_off = self.mask.size-1;
         unsafe {
-            MASK.lock().range_off(s_off, e_off);
+            self.mask.range_off(s_off, e_off);
         }
     }
 
     unsafe fn find_and_alloc(&mut self, size: u64) -> *mut u8 {
-        println!("find_and_alloc");
+        // println!("find_and_alloc");
         let mut curr = &self.head;
-
-        let set_mask = |addr: u64, size: u64| {
-            let s_off = (addr - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW;
-            let e_off = (addr + size - HEAP_START_ADDR -8) >> HEAP_BLOCK_SIZE_BW;
-            MASK.lock().range_on(s_off, e_off);
-        };
 
         while curr.next.is_some() && curr.size < size {
             curr = curr.next.as_ref().unwrap();
@@ -397,20 +396,27 @@ impl HeapAllocator {
         let _addr = curr.start_addr();
         let _block = &mut *(_addr as *mut FreeBlock);
         let mut _size = _block.size;
+        // println!("find_and_alloc(1)");
         while _size < size {
             self.expand();
             _size = (&*(_addr as *const FreeBlock)).size;
         }
+        // println!("find_and_alloc(2)");
 
-        if _size == size {
-            let ptr = _block.release();
-            set_mask(ptr as u64, size);
-            ptr
+
+        let _ptr = if _size == size {
+            _block.release()
         } else {
-            let ptr = _block.alloc(size);
-            set_mask(ptr as u64, size);
-            ptr
-        }
+            _block.alloc(size)
+        };
+
+        let _addr_1 = _ptr as u64;
+        let s_off = (_addr_1 - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW;
+        let e_off = ((_addr_1 + size - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW) - 1;
+        self.mask.range_on(s_off, e_off);
+
+        // println!("find_and_alloc end");
+        _ptr
     }
 
     fn size_align(layout: Layout) -> (u64, u64) {
@@ -423,13 +429,16 @@ impl HeapAllocator {
 
 unsafe impl GlobalAlloc for Locked<HeapAllocator> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        println!("alloc");
+        // println!("alloc");
         let (size, _) = HeapAllocator::size_align(layout);
-        self.lock().find_and_alloc(size)
+        let p = self.lock().find_and_alloc(size);
+
+        // println!("alloc end");
+        p
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        println!("dealloc");
+        // println!("dealloc");
         let (size, _) = HeapAllocator::size_align(layout);
         self.lock().ins_merg_free_block(ptr as u64, size);
     }
@@ -437,6 +446,8 @@ unsafe impl GlobalAlloc for Locked<HeapAllocator> {
 
 pub fn init() {
     unsafe {
-        ALLOCATOR.lock().expand();
+        let mut alloc = ALLOCATOR.lock();
+        alloc.mask.inner = Some(&mut *(HEAP_MASK_START_ADDR as *mut [u64; HEAP_MAX_BLOCKS as usize]));
+        alloc.expand();
     }
 }
