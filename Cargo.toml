@@ -15,6 +15,18 @@ x86_64 = "0.9.5"
 pic8259_simple = "0.1.1"
 pc-keyboard = "0.5.0"
 
+[dependencies.num]
+version = "0.2.1"
+default_features = false
+
+[dependencies.num-traits]
+version = "0.2"
+default_features = false
+
+[dependencies.num-derive]
+version = "0.3"
+default_features = false
+
 [dependencies.lazy_static]
 version = "1.0"
 features = ["spin_no_std"]

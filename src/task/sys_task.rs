@@ -20,6 +20,7 @@ use lazy_static::lazy_static;
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1, KeyCode};
 use alloc::string::String;
 use crate::console::sys_log;
+use crate::drivers::pci;
 
 static SYS_TASK_QUEUE: OnceCell<ArrayQueue<SysTask>> = OnceCell::uninit();
 static SYS_TASK_WAKER: AtomicWaker = AtomicWaker::new();
@@ -44,15 +45,9 @@ impl SysTask{
     pub fn run(&self) {
         match self {
             Self::TIMMER(i) =>{
-                if i % 6 == 0 {
-                    let j = i / 6;
-                
-                    match j % 4 {
-                        0 => error!("time: {}", j),
-                        1 => warn!("time: {}", j),
-                        3 => debug!("time: {}", j),
-                        _ => info!("time: {}", j),
-                    };
+                if i == &6 {
+                    info!("scan pci devices");
+                    pci::scan_devices();
                 }
             },
             Self::KEY(c) => {

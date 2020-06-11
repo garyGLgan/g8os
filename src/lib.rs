@@ -11,6 +11,8 @@
 #![feature(generic_associated_types)]
 
 extern crate alloc;
+#[macro_use]
+extern crate num_derive;
 
 use core::panic::PanicInfo;
 pub mod console;
@@ -20,6 +22,7 @@ pub mod kernel_const;
 pub mod memory;
 pub mod task;
 pub mod util;
+pub mod drivers;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -29,6 +32,7 @@ use memory::frame_controller::FRAME_ALLOC;
 use memory::heap_allocator;
 use memory::paging::g8_page_table::PAGE_TABLE;
 use task::{executor::Executor, Task, sys_task};
+use drivers::pci;
 
 use x86_64::VirtAddr;
 

@@ -121,12 +121,8 @@ impl Stream for LogMsgStream {
 }
 
 fn _fmt(args: Arguments) -> String {
-    fn write<W: Write>(f: &mut W, args: Arguments) -> Result<(), Error> {
-        f.write_fmt(args)
-    };
-
     let mut buf = String::new();
-    write(&mut buf, args).unwrap();
+    buf.write_fmt(args).unwrap();
     buf
 }
 
@@ -160,6 +156,8 @@ pub fn init() {
         .expect("LogMsgStream::new should only the called once");
     IS_STARTED.lock().on();
     SYS_LOG_LEVEL.lock().on(LogLevel::ERROR);
+    SYS_LOG_LEVEL.lock().on(LogLevel::INFO);
+    SYS_LOG_LEVEL.lock().on(LogLevel::WARN);
 }
 
 pub async fn print_log() {
