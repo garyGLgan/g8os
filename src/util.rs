@@ -15,3 +15,28 @@ impl<T> Locked<T> {
         self.inner.lock()
     }
 }
+
+pub struct Flag(bool);
+
+impl Flag {
+    pub const fn new() -> Self {
+        Flag(false)
+    }
+
+    pub fn on(&mut self) {
+        self.0 = true;
+    }
+
+    pub fn off(&mut self) {
+        self.0 = false;
+    }
+
+    pub fn get(&self) -> bool {
+        self.0
+    }
+}
+
+#[macro_export]
+macro_rules! no_interrupt {
+    ($($arg:tt)*) => (x86_64::instructions::interrupts::without_interrupts($($arg)*));
+}

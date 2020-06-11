@@ -1,13 +1,16 @@
 use crate::kernel_const::FRAME_SIZE;
 use crate::memory::frame_controller::FRAME_ALLOC;
 use crate::memory::paging::g8_page_table::PAGE_TABLE;
-use crate::{print,println};
+use crate::println;
 use crate::util::Locked;
 use alloc::alloc::{GlobalAlloc, Layout};
 use x86_64::{
     structures::paging::{mapper::MapToError, PageTableFlags, Size2MiB, UnusedPhysFrame},
     VirtAddr,
 };
+use crate::no_interrupt;
+use spin::Mutex;
+use lazy_static::lazy_static;
 
 const HEAP_MAX_BLOCKS: u64 = 0x4000000; // max heap size 128G
 const HEAP_BLOCK_SIZE: u64 = 64; // matches cache line
@@ -18,9 +21,87 @@ const HEAP_START_ADDR: u64 = 0x40000000;
 #[global_allocator]
 static ALLOCATOR: Locked<HeapAllocator> = Locked::new(HeapAllocator::new());
 
+// lazy_static!{
+//     static ref MASK: Mutex<BitMask> = unsafe{ 
+//         Mutex::new(BitMask {
+//                         size: 0,
+//                         inner: &mut *(HEAP_MASK_START_ADDR as *mut [u64; HEAP_MAX_BLOCKS as usize]),
+//                     })
+//         };
+// }
+
+
+const MASK_64: [u64; 65] = [
+                            0b0,
+                            0b1000000000000000000000000000000000000000000000000000000000000000,
+                            0b1100000000000000000000000000000000000000000000000000000000000000,
+                            0b1110000000000000000000000000000000000000000000000000000000000000,
+                            0b1111000000000000000000000000000000000000000000000000000000000000,
+                            0b1111100000000000000000000000000000000000000000000000000000000000,
+                            0b1111110000000000000000000000000000000000000000000000000000000000,
+                            0b1111111000000000000000000000000000000000000000000000000000000000,
+                            0b1111111100000000000000000000000000000000000000000000000000000000,
+                            0b1111111110000000000000000000000000000000000000000000000000000000,
+                            0b1111111111000000000000000000000000000000000000000000000000000000,
+                            0b1111111111100000000000000000000000000000000000000000000000000000,
+                            0b1111111111110000000000000000000000000000000000000000000000000000,
+                            0b1111111111111000000000000000000000000000000000000000000000000000,
+                            0b1111111111111100000000000000000000000000000000000000000000000000,
+                            0b1111111111111110000000000000000000000000000000000000000000000000,
+                            0b1111111111111111000000000000000000000000000000000000000000000000,
+                            0b1111111111111111100000000000000000000000000000000000000000000000,
+                            0b1111111111111111110000000000000000000000000000000000000000000000,
+                            0b1111111111111111111000000000000000000000000000000000000000000000,
+                            0b1111111111111111111100000000000000000000000000000000000000000000,
+                            0b1111111111111111111110000000000000000000000000000000000000000000,
+                            0b1111111111111111111111000000000000000000000000000000000000000000,
+                            0b1111111111111111111111100000000000000000000000000000000000000000,
+                            0b1111111111111111111111110000000000000000000000000000000000000000,
+                            0b1111111111111111111111111000000000000000000000000000000000000000,
+                            0b1111111111111111111111111100000000000000000000000000000000000000,
+                            0b1111111111111111111111111110000000000000000000000000000000000000,
+                            0b1111111111111111111111111111000000000000000000000000000000000000,
+                            0b1111111111111111111111111111100000000000000000000000000000000000,
+                            0b1111111111111111111111111111110000000000000000000000000000000000,
+                            0b1111111111111111111111111111111000000000000000000000000000000000,
+                            0b1111111111111111111111111111111100000000000000000000000000000000,
+                            0b1111111111111111111111111111111110000000000000000000000000000000,
+                            0b1111111111111111111111111111111111000000000000000000000000000000,
+                            0b1111111111111111111111111111111111100000000000000000000000000000,
+                            0b1111111111111111111111111111111111110000000000000000000000000000,
+                            0b1111111111111111111111111111111111111000000000000000000000000000,
+                            0b1111111111111111111111111111111111111100000000000000000000000000,
+                            0b1111111111111111111111111111111111111110000000000000000000000000,
+                            0b1111111111111111111111111111111111111111000000000000000000000000,
+                            0b1111111111111111111111111111111111111111100000000000000000000000,
+                            0b1111111111111111111111111111111111111111110000000000000000000000,
+                            0b1111111111111111111111111111111111111111111000000000000000000000,
+                            0b1111111111111111111111111111111111111111111100000000000000000000,
+                            0b1111111111111111111111111111111111111111111110000000000000000000,
+                            0b1111111111111111111111111111111111111111111111000000000000000000,
+                            0b1111111111111111111111111111111111111111111111100000000000000000,
+                            0b1111111111111111111111111111111111111111111111110000000000000000,
+                            0b1111111111111111111111111111111111111111111111111000000000000000,
+                            0b1111111111111111111111111111111111111111111111111100000000000000,
+                            0b1111111111111111111111111111111111111111111111111110000000000000,
+                            0b1111111111111111111111111111111111111111111111111111000000000000,
+                            0b1111111111111111111111111111111111111111111111111111100000000000,
+                            0b1111111111111111111111111111111111111111111111111111110000000000,
+                            0b1111111111111111111111111111111111111111111111111111111000000000,
+                            0b1111111111111111111111111111111111111111111111111111111100000000,
+                            0b1111111111111111111111111111111111111111111111111111111110000000,
+                            0b1111111111111111111111111111111111111111111111111111111111000000,
+                            0b1111111111111111111111111111111111111111111111111111111111100000,
+                            0b1111111111111111111111111111111111111111111111111111111111110000,
+                            0b1111111111111111111111111111111111111111111111111111111111111000,
+                            0b1111111111111111111111111111111111111111111111111111111111111100,
+                            0b1111111111111111111111111111111111111111111111111111111111111110,
+                            0b1111111111111111111111111111111111111111111111111111111111111111,
+                        ];
+
 struct BitMask {
     size: u64,
-    inner: Option<&'static mut [u64; HEAP_MAX_BLOCKS as usize]>,
+    inner:Option<&'static mut [u64; HEAP_MAX_BLOCKS as usize]>,
 }
 
 impl BitMask {
@@ -28,36 +109,68 @@ impl BitMask {
         HEAP_MASK_START_ADDR + (self.size >> 3)
     }
 
-    unsafe fn inner(&mut self) -> &mut [u64; HEAP_MAX_BLOCKS as usize] {
-        self.inner.as_mut().unwrap()
-    }
-
-    unsafe fn set_on(&mut self, pos: u64) {
-        let (p, m) = self.split_pos(pos);
-        let inner = self.inner();
-        inner[p] = inner[p] | m;
-    }
-
-    unsafe fn set_off(&mut self, pos: u64) {
-        let (p, m) = self.split_pos(pos);
-        let inner = self.inner();
-        inner[p] = inner[p] & !m;
-    }
-
-    fn split_pos(&self, pos: u64) -> (usize, u64) {
+    fn split_pos(&self, pos: u64) -> (u64, u8) {
         assert!(pos < self.size);
-        ((pos >> 6) as usize, 1 << (63 - (pos & 0x3f)))
+        (pos >> 6, (pos & 0x3f) as u8)
     }
 
     unsafe fn is_set(&mut self, pos: u64) -> bool {
         let (p, m) = self.split_pos(pos);
-        let inner = self.inner();
-        inner[p] & m != 0
+        let _m = get_mask_in_u64(m, m);
+        let v = get_u64(HEAP_MASK_START_ADDR+p*8);
+        let r = v & _m != 0;
+        // println!("is_set, v:0x{:x}, _m:0x{:x}, r: {}", v, _m, r);
+        r
     }
 
     fn is_empty(&self) -> bool {
         self.size == 0
     }
+
+    unsafe fn range_off(&mut self, s: u64, e: u64) {
+        self.set_by_u64(s, e, 
+            |_s, _e, i| set_u64(HEAP_MASK_START_ADDR+i*8, get_u64(HEAP_MASK_START_ADDR+i*8)&!get_mask_in_u64( _s, _e)));
+    }
+
+    unsafe fn range_on(&mut self, s: u64, e: u64) {
+        self.set_by_u64(s, e, 
+            |_s, _e, i| set_u64(HEAP_MASK_START_ADDR+i*8, get_u64(HEAP_MASK_START_ADDR+i*8)|get_mask_in_u64(_s,_e)));
+        
+    }
+
+    unsafe fn set_by_u64<F>(&mut self, s: u64, e: u64, f: F)
+        where F: FnOnce(u8, u8, u64) -> () + Copy {
+        assert!(s <= e);
+        let (p1, q1) = self.split_pos(s);
+        let (p2, q2) = self.split_pos(e);
+        
+        if p1 == p2 {
+            f(q1, q2, p1 as u64);
+        }else {
+            for i in p1..=p2 {
+                match i {
+                    p1 => f(q1, 63, i as u64),
+                    p2 => f(0, q2, i as u64),
+                    _ => f(0, 63, i as u64),
+                }
+            }
+        }
+    }
+}
+
+unsafe fn get_u64(addr: u64) -> u64{
+    (addr as *const u64).read()
+}
+
+unsafe fn set_u64( addr: u64, v: u64) {
+    (addr as *mut u64).write(v);
+}
+
+fn get_mask_in_u64(s: u8, e: u8) -> u64{
+    assert!(s>=0 && s<64);
+    assert!(e>=0 && e<64);
+    assert!(s<=e);
+    !MASK_64[s as usize] & MASK_64[(e+1) as usize]
 }
 
 struct FreeBlock {
@@ -76,6 +189,7 @@ impl FreeBlock {
     }
 
     unsafe fn expand_backward(&mut self, addr: u64, size: u64) -> &mut Self {
+        // println!("expand_backward, start:0x{:x}, end:0x{:x}, addr:0x{:x}", self.start_addr(), self.end_addr(), addr);
         assert!(addr == self.end_addr());
         self.size += size;
         self.write_addr_at_end();
@@ -105,7 +219,7 @@ impl FreeBlock {
     unsafe fn merge_next(&mut self) -> &mut Self {
         let _s_addr = self.start_addr();
         let _e_addr = self.end_addr();
-        
+
         if let Some(ref mut next) = self.next {
             if _e_addr == next.start_addr() {
                 let block = &mut *(_e_addr as *mut FreeBlock);
@@ -148,22 +262,22 @@ impl FreeBlock {
 }
 
 struct HeapAllocator {
-    mask: BitMask,
     head: FreeBlock,
+    mask: BitMask,
     size: u64,
 }
 
 impl HeapAllocator {
     const fn new() -> Self {
         Self {
-            mask: BitMask {
-                size: 0,
-                inner: None,
-            },
             head: FreeBlock {
                 size: 0,
                 prev: None,
                 next: None,
+            },
+            mask: BitMask {
+                size: 0,
+                inner: None,
             },
             size: 0,
         }
@@ -174,6 +288,7 @@ impl HeapAllocator {
     }
 
     pub unsafe fn expand(&mut self) -> Result<(), MapToError<Size2MiB>> {
+        // println!("expand");
         let alloc_frame =
             || -> Result<(UnusedPhysFrame<Size2MiB>, PageTableFlags), MapToError<Size2MiB>> {
                 let frame = FRAME_ALLOC
@@ -202,30 +317,45 @@ impl HeapAllocator {
     }
 
     unsafe fn ins_merg_free_block(&mut self, addr: u64, size: u64) {
+        // println!("ins_merg_free_block, addr:0x{:x}, size:{}", addr, size);
         let s_off = (addr - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW;
         let e_off = (addr + size - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW;
-        let node = if s_off > 0 && !self.mask.is_set(s_off - 1) {
-            let _addr = ((addr - 8) as *const u64).read();
-            let _block = &mut *(_addr as *mut FreeBlock);
-            _block.expand_backward(addr, size);
-            if e_off < self.mask.size && !self.mask.is_set(e_off) {
+        // println!("ins_merg_free_block");
+        let mask_size = self.mask.size;
+        let can_merge_pre = s_off > 0 && !self.mask.is_set(s_off - 1);
+        let can_merge_back = e_off < mask_size && !self.mask.is_set(e_off);
+        // println!("ins_merg_free_block, can_merge_pre:{}, can_merge_back:{}",can_merge_pre,can_merge_back);
+        match (can_merge_pre, can_merge_back) {
+            (true, true ) => {
+                // println!("ins_merg_free_block, 1");
+                let _addr = ((addr - 8) as *const u64).read();
+                let _block = &mut *(_addr as *mut FreeBlock);
+                _block.expand_backward(addr, size);
                 _block.merge_next();
+            },
+            (true, false) => {
+                // println!("ins_merg_free_block, 2");
+                let _addr = ((addr - 8) as *const u64).read();
+                let _block = &mut *(_addr as *mut FreeBlock);
+                _block.expand_backward(addr, size);
+            },
+            (false, true) => {
+                // println!("ins_merg_free_block, 3");
+                let _block = &mut *((addr + size) as *mut FreeBlock);
+                _block.expand_forward(addr, size);
+            },
+            (false, false) => {
+                // println!("ins_merg_free_block, 4");
+                self.add_free_block(addr, size);
             }
-            _block
-        } else if e_off < self.mask.size && !self.mask.is_set(e_off) {
-            let _block = &mut *((addr + size) as *mut FreeBlock);
-            _block.expand_forward(addr, size)
-        } else {
-            self.add_free_block(addr, size);
-            self.head.next.as_mut().unwrap()
-        };
-        self.mask
-            .set_off((node.start_addr() - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW);
-        self.mask
-            .set_off((node.end_addr() - HEAP_START_ADDR - 1) >> HEAP_BLOCK_SIZE_BW);
+        }
+        // println!("ins_merg_free_block, 5");
+
+        self.mask.range_off(s_off, e_off-1);
     }
 
     unsafe fn add_free_block(&mut self, addr: u64, size: u64) {
+        // println!("add_free_block");
         let _addr = self.head.start_addr();
         let block = FreeBlock {
             size,
@@ -243,30 +373,21 @@ impl HeapAllocator {
     }
 
     fn expand_mask(&mut self, frame: UnusedPhysFrame<Size2MiB>, flags: PageTableFlags) {
-        let s_ptr = self.mask.boudry_addr() as *mut u64;
+        // println!("expand_mask");
+        let s_off = self.mask.size;
         PAGE_TABLE
             .lock()
             .map_to(VirtAddr::new(self.mask.boudry_addr()), frame, flags);
-        self.mask.size += 8 * FRAME_SIZE;
-        let e_ptr = (self.mask.boudry_addr() - 8) as *mut u64;
+            self.mask.size += 8 * FRAME_SIZE;
+        let e_off = self.mask.size-1;
         unsafe {
-            s_ptr.write(0);
-            e_ptr.write(0);
+            self.mask.range_off(s_off, e_off);
         }
     }
 
     unsafe fn find_and_alloc(&mut self, size: u64) -> *mut u8 {
+        // println!("find_and_alloc");
         let mut curr = &self.head;
-
-        let set_mask = |addr: u64, size: u64, partial: bool, mask: &mut BitMask| {
-            let s_off = (addr - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW;
-            let e_off = (addr + size - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW;
-            mask.set_on(s_off);
-            mask.set_on(e_off - 1);
-            if s_off > 0 && partial {
-                mask.set_off(s_off - 1)
-            }
-        };
 
         while curr.next.is_some() && curr.size < size {
             curr = curr.next.as_ref().unwrap();
@@ -275,20 +396,27 @@ impl HeapAllocator {
         let _addr = curr.start_addr();
         let _block = &mut *(_addr as *mut FreeBlock);
         let mut _size = _block.size;
+        // println!("find_and_alloc(1)");
         while _size < size {
             self.expand();
             _size = (&*(_addr as *const FreeBlock)).size;
         }
+        // println!("find_and_alloc(2)");
 
-        if _size == size {
-            let ptr = _block.release();
-            set_mask(ptr as u64, size, false, &mut self.mask);
-            ptr
+
+        let _ptr = if _size == size {
+            _block.release()
         } else {
-            let ptr = _block.alloc(size);
-            set_mask(ptr as u64, size, true, &mut self.mask);
-            ptr
-        }
+            _block.alloc(size)
+        };
+
+        let _addr_1 = _ptr as u64;
+        let s_off = (_addr_1 - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW;
+        let e_off = ((_addr_1 + size - HEAP_START_ADDR) >> HEAP_BLOCK_SIZE_BW) - 1;
+        self.mask.range_on(s_off, e_off);
+
+        // println!("find_and_alloc end");
+        _ptr
     }
 
     fn size_align(layout: Layout) -> (u64, u64) {
@@ -301,11 +429,16 @@ impl HeapAllocator {
 
 unsafe impl GlobalAlloc for Locked<HeapAllocator> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        // println!("alloc");
         let (size, _) = HeapAllocator::size_align(layout);
-        self.lock().find_and_alloc(size)
+        let p = self.lock().find_and_alloc(size);
+
+        // println!("alloc end");
+        p
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        // println!("dealloc");
         let (size, _) = HeapAllocator::size_align(layout);
         self.lock().ins_merg_free_block(ptr as u64, size);
     }
@@ -313,8 +446,8 @@ unsafe impl GlobalAlloc for Locked<HeapAllocator> {
 
 pub fn init() {
     unsafe {
-        ALLOCATOR.lock().mask.inner =
-            Some(&mut *(HEAP_MASK_START_ADDR as *mut [u64; HEAP_MAX_BLOCKS as usize]));
-        ALLOCATOR.lock().expand();
+        let mut alloc = ALLOCATOR.lock();
+        alloc.mask.inner = Some(&mut *(HEAP_MASK_START_ADDR as *mut [u64; HEAP_MAX_BLOCKS as usize]));
+        alloc.expand();
     }
 }

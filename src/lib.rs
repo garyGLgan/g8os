@@ -7,32 +7,44 @@
 #![feature(const_raw_ptr_deref)]
 #![feature(alloc_error_handler)]
 #![feature(const_mut_refs)]
+#![feature(wake_trait)]
+#![feature(generic_associated_types)]
 
 extern crate alloc;
 
 use core::panic::PanicInfo;
+pub mod console;
 pub mod gdt;
 pub mod idt;
 pub mod kernel_const;
 pub mod memory;
+pub mod task;
 pub mod util;
-pub mod vga_buffer;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use console::sys_log;
 use kernel_const::STACK_BOTTOM;
 use memory::frame_controller::FRAME_ALLOC;
 use memory::heap_allocator;
 use memory::paging::g8_page_table::PAGE_TABLE;
+use task::{executor::Executor, Task, sys_task};
+
 use x86_64::VirtAddr;
+
 
 #[no_mangle]
 pub unsafe extern "C" fn g8start() {
-    println!("Welcom to G8 OS!");
+    print!("Welcom to G8 OS! ");
     println!("Auth: Gary Gan");
     init();
-    many_boxes_alloc_test();
-    hlt_loop()
+    // many_boxes_alloc_test();
+    sys_task::init();
+    sys_log::init();
+    let mut executor = Executor::new(); // new
+    executor.spawn(Task::new(sys_task::run_sys_task()));
+    executor.spawn(Task::new(sys_log::print_log()));
+    executor.run();
 }
 
 pub fn hlt_loop() -> ! {
@@ -61,7 +73,7 @@ fn many_boxes_alloc_test() {
     print!("many_boxes_alloc_test... ");
 
     let mut v_box = Vec::<Box<i32>>::new();
-    for i in 0..1000000 {
+    for i in 0..10 {
         let x = Box::new(i);
         if *x != i {
             panic!("error the value in box is not correct");
