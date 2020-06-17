@@ -175,7 +175,7 @@ pub fn scan_devices() {
                 println!("Found SATA device: bus {} device {}", i.bus, i.device);
             },
             _ => {
-                info!("Found unsupported PCI device: bus {} device {} class {:?}", i.bus, i.device, i.full_class);
+                info!("Found unsupported PCI device: bus {} device {} class {:?}, device_id 0x{:x}, vendor_id 0x{:x}", i.bus, i.device, i.full_class, i.device_id, i.vendor_id);
             }
         }
     }
